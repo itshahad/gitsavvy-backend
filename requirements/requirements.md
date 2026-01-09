@@ -21,7 +21,7 @@
 1. get repo metadata
 2. download repo
 3. retrieve selected files
-4. for each file: create AST with tree-sitter
+4. for each file: create AST with tree-sitter for code files, for text files, make splitting by num of lines, take an overlapping lines between chunks
 5. take nodes and embed it
 	- `FILE_OUTLINE` chunk (imports/exports + symbol list)
 	- `CLASS_OUTLINE` chunks (signature + method names; **no bodies**)

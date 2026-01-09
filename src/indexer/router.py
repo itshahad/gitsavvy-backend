@@ -18,11 +18,14 @@
 
 
 from fastapi import APIRouter
-from .service import get_repo_metadata, download_repo
+from .service import *
 
 router = APIRouter()
 
 @router.get("/")
 def test():
     # return get_repo_metadata("django", "django")
-    return download_repo("django", "django")
+    # return download_repo("octocat", "Hello-World", "master")
+    # return download_repo("django", "django")
+    # return is_selected("/gitsavvy-backend/src/cindexe/router.py")
+    return select_repo_files("repos/django.zip", "django")
