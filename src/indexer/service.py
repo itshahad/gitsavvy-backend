@@ -2,6 +2,8 @@ import requests
 import os
 from pathlib import Path
 from zipfile import ZipFile
+from tree_sitter import Language, Parser
+from tree_sitter_language_pack import get_binding, get_language, get_parser
 
 API_URL = "https://api.github.com/"
 GITHUB_API_TOKEN = os.getenv("GITHUB_API_TOKEN")
@@ -113,3 +115,83 @@ def select_repo_files(zip_file_path: str, repo_name, max_size:int=200_000): # 20
     return selected_files
 
 
+def chunk_text_files(file_path: str, chunk_size= 100, overlapping=20):
+    if (overlapping >= chunk_size):
+        raise ValueError("overlapping value must be less than chunk_size")
+    
+    chunks = []
+
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+    
+    step = chunk_size - overlapping
+
+    for i in range(0, len(lines), step):
+        chunk = lines[i: i + chunk_size]
+        chunks.append(chunk)
+    
+    return chunks
+
+
+FUNC_HINTS = ("function", "method", "constructor")
+CLASS_HINTS = ("class", "interface", "struct", "trait", "protocol", "object")
+
+DECL_HINTS = ("declaration", "definition", "item")
+SPEC_SUFFIX = "_specifier"
+
+def _is_function(node):
+    t = node.type
+    if not any(h in t for h in FUNC_HINTS):
+        return False
+    return (
+        any(d in t for d in DECL_HINTS)
+        or t == "function_definition"
+        or t == "method_definition"
+        or t == "method_declaration"
+        or t == "constructor_declaration"
+    )
+
+def _is_class(node):
+    t = node.type
+    if not any(h in t for h in CLASS_HINTS):
+        return False
+    return (
+        any(d in t for d in DECL_HINTS)
+        or t.endswith(SPEC_SUFFIX)
+        or t in ("class_definition", "class_declaration", "interface_declaration")
+    )
+
+
+def node_text(src: bytes, node):
+    return src[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+
+def visit_node(node, src: bytes, chunks_list: list):
+    is_fn = _is_function(node)
+    is_cls = _is_class(node)
+
+    if is_fn or is_cls:
+        chunks_list.append(
+            {
+                "type": "function" if is_fn else "class" if is_cls else "",
+                "start_line": node.start_point[0]+1,
+                "end_line": node.end_point[0]+1,
+                "code_text": node_text(src, node),
+                "node_type": node.type
+            }
+        )
+    for child in node.children:
+        visit_node(child, src, chunks_list)
+
+
+def chunk_code_files(file_path: str):
+    chunks = []
+    file_bytes = Path(file_path).read_bytes()
+    lang = "python"
+    parser = get_parser(language_name=lang)
+
+    tree = parser.parse(file_bytes)
+    root = tree.root_node
+
+    visit_node(root, file_bytes, chunks)
+        
+    return chunks

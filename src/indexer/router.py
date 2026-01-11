@@ -28,4 +28,6 @@ def test():
     # return download_repo("octocat", "Hello-World", "master")
     # return download_repo("django", "django")
     # return is_selected("/gitsavvy-backend/src/cindexe/router.py")
-    return select_repo_files("repos/django.zip", "django")
+    # return select_repo_files("repos/django.zip", "django")
+    # return chunk_text_files(file_path="repos/django/django-django-f3b982f/docs/index.txt", chunk_size=20, overlapping=5)
+    return chunk_code_files(file_path="repos/django/django-django-f3b982f/django/apps/config.py")
