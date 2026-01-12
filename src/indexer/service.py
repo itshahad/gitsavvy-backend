@@ -140,7 +140,7 @@ DECL_HINTS = ("declaration", "definition", "item")
 SPEC_SUFFIX = "_specifier"
 
 def _is_function(node):
-    t = node.type
+    t = node.type    
     if not any(h in t for h in FUNC_HINTS):
         return False
     return (
@@ -149,6 +149,7 @@ def _is_function(node):
         or t == "method_definition"
         or t == "method_declaration"
         or t == "constructor_declaration"
+        or t == "async_function_definition"
     )
 
 def _is_class(node):
@@ -165,17 +166,88 @@ def _is_class(node):
 def node_text(src: bytes, node):
     return src[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
 
+def _slice_text(src: bytes, a: int, b: int) -> str:
+    return src[a:b].decode("utf-8", errors="replace")
+
+def _find_body(node):
+    hints = ["body", "block", "members", "suite"]
+    for hint in hints:
+        b = node.child_by_field_name(hint)
+        if b is not None: 
+            return b
+    return None
+
+def _method_signature(src: bytes, node):
+    body = _find_body(node)
+    if body:
+        return _slice_text(src, node.start_byte, body.start_byte)
+    else:
+        return node_text(src, node)
+
+def _unwrap_function(wrapper):
+    for child in wrapper.children:
+        if _is_function(child):
+            return child
+    return None
+
+def build_class_summary( src: bytes, node):
+    parts = []
+
+    body = _find_body(node)
+
+    header = _slice_text(src, node.start_byte, body.start_byte) if body else node_text(src, node)
+    parts.append(header.strip())
+
+    simple_contents = []
+    methods = []
+
+    if body:
+        for child in body.children:
+            if _is_function(child):
+                methods.append(_method_signature(src, child))
+                continue
+
+            wrapped_function = _unwrap_function(child)
+            if wrapped_function:
+                methods.append(_method_signature(src, wrapped_function))
+                continue
+
+            # if this node is just a wrapper and has children, don’t treat it as a class member itself let recursion handle its children
+            if not child.is_named and child.children:
+                continue
+            
+            content = node_text(src, child).strip()
+            simple_contents.append(content)
+    if simple_contents:
+        parts.append("\nMembers/Comments:\n+" + "\n".join(f"- {m}" for m in simple_contents))
+    if methods:
+        parts.append("\nMethods:\n+" + "\n".join(f"- {m}" for m in methods))
+    return "\n".join(parts).strip()
+
+
+
+
 def visit_node(node, src: bytes, chunks_list: list):
     is_fn = _is_function(node)
     is_cls = _is_class(node)
 
-    if is_fn or is_cls:
+    if is_fn:
         chunks_list.append(
             {
-                "type": "function" if is_fn else "class" if is_cls else "",
+                "type": "function",
                 "start_line": node.start_point[0]+1,
                 "end_line": node.end_point[0]+1,
                 "code_text": node_text(src, node),
+                "node_type": node.type
+            }
+        )
+    elif is_cls:
+        chunks_list.append(
+            {
+                "type": "class",
+                "start_line": node.start_point[0]+1,
+                "end_line": node.end_point[0]+1,
+                "code_text": build_class_summary(src, node),
                 "node_type": node.type
             }
         )
