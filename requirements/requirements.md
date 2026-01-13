@@ -1,3 +1,7 @@
+# DB schema
+https://drive.google.com/file/d/10ibLK4_cq8hO5rsIVx31JhRKaYNi4pvc/view?usp=sharing
+
+
 # Authentication: 
 
 - Use Github OAuth
