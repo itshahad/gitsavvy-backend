@@ -30,7 +30,6 @@ def select_repo_files(zip_file_path: str, repo_name, max_size:int=200_000): # 20
 
     with ZipFile(zip_file_path, "r") as zip:
         for info in zip.infolist():
-            print(info)
             if info.is_dir() or info.file_size > max_size:
                 continue
 
@@ -48,14 +47,19 @@ def chunk_text_files(file_path: str, chunk_size= 100, overlapping=20):
     
     chunks = []
 
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
     
     step = chunk_size - overlapping
 
     for i in range(0, len(lines), step):
         chunk = lines[i: i + chunk_size]
-        chunks.append(chunk)
+        chunks.append({
+            "file_path": file_path,
+            "start_line": i + 1,
+            "end_line": min(i + chunk_size, len(lines)),
+            "code_text": "\n".join(chunk).strip(),
+        })
     
     return chunks
 #--------------------------------------------------------------------------------------------------
@@ -94,7 +98,7 @@ def build_class_summary(src: bytes, node):
         parts.append("\nMethods:\n+" + "\n".join(f"- {m}" for m in methods))
     return "\n".join(parts).strip()
 
-def build_file_summary(src: bytes, root):
+def build_file_summary(src: bytes, root, file_path: str):
     parts = []
 
     for child in root.children:
@@ -105,10 +109,14 @@ def build_file_summary(src: bytes, root):
         if not text:
             continue
         parts.append(text)
-    return "\n".join(parts).strip() 
+    return {
+        "type": "file_summary",
+        "path": file_path,
+        "text": "\n".join(parts).strip(),
+    } 
 
 
-def visit_node(node, src: bytes, chunks_list: list):
+def visit_node(node, src: bytes, chunks_list: list, file_path: str):
     is_fn = is_function(node)
     is_cls = is_class(node)
 
@@ -116,6 +124,7 @@ def visit_node(node, src: bytes, chunks_list: list):
         chunks_list.append(
             {
                 "type": "function",
+                "file_path": file_path,
                 "start_line": node.start_point[0]+1,
                 "end_line": node.end_point[0]+1,
                 "code_text": node_text(src, node),
@@ -125,7 +134,8 @@ def visit_node(node, src: bytes, chunks_list: list):
     elif is_cls:
         chunks_list.append(
             {
-                "type": "class",
+                "type": "class_summary",
+                "file_path": file_path,
                 "start_line": node.start_point[0]+1,
                 "end_line": node.end_point[0]+1,
                 "code_text": build_class_summary(src, node),
@@ -133,7 +143,7 @@ def visit_node(node, src: bytes, chunks_list: list):
             }
         )
     for child in node.children:
-        visit_node(child, src, chunks_list)
+        visit_node(child, src, chunks_list, file_path)
 
 def chunk_code_files(file_path: str):
     chunks = []
@@ -144,8 +154,26 @@ def chunk_code_files(file_path: str):
     tree = parser.parse(file_bytes)
     root = tree.root_node
 
-    chunks.append(build_file_summary(file_bytes, root))
-    visit_node(root, file_bytes, chunks)
+    chunks.append(build_file_summary(file_bytes, root, file_path))
+    visit_node(root, file_bytes, chunks, file_path)
         
     return chunks
 #--------------------------------------------------------------------------------------------------
+
+def chunk_repo_files(zip_file_path:str, repo_name:str):
+    chunks = []
+    selected_files = select_repo_files(zip_file_path, repo_name)
+    for file_path in selected_files:
+        if is_binary(f"{REPOS_PATH}/{repo_name}/{file_path}"):
+            print(f"BINARY -> {file_path}")
+            continue
+
+        e = ext(file_path)
+
+        if e in AST_LANG_EXT:
+            print(f"AST_LANG_EXT -> {file_path}")
+            chunks.append(chunk_code_files(f"{REPOS_PATH}/{repo_name}/{file_path}"))
+        elif e in TEXT_LANG_EXT:
+            print(f"TEXT_LANG_EXT -> {file_path}")
+            chunks.append(chunk_text_files(f"{REPOS_PATH}/{repo_name}/{file_path}") )           
+    return chunks

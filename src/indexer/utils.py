@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from .constants import *
 
 def norm(p: str) -> str:
@@ -69,3 +70,12 @@ def unwrap_function(wrapper):
         if is_function(child):
             return child
     return None
+
+def is_binary(file_path: str, sample_size: int=4096):
+    data = Path(file_path).read_bytes()[:sample_size]
+    
+    for magic in BINARY_FILE_MAGICS:
+        if data.startswith(magic):
+            return True
+    
+    return False

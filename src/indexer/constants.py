@@ -43,7 +43,6 @@ CODE_EXT = {
     ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg",
     ".html", ".css", ".scss",
     ".sh", ".bat",
-    ".sql",
 }
 
 FUNC_HINTS = ("function", "method", "constructor")
@@ -51,3 +50,64 @@ CLASS_HINTS = ("class", "interface", "struct", "trait", "protocol", "object")
 
 DECL_HINTS = ("declaration", "definition", "item")
 SPEC_SUFFIX = "_specifier"
+
+AST_LANG_EXT = {
+    ".py", ".js", ".ts", ".tsx", ".jsx",
+    ".java", ".kt", ".go", ".rs",
+    ".c", ".cpp", ".h", ".dart",
+    ".cs", ".php", ".rb", ".swift", 
+}
+
+TEXT_LANG_EXT = {
+    ".md", ".rst", ".txt",
+    ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg",
+    ".html", ".css", ".scss",
+    ".sh", ".bat",
+}
+
+BINARY_FILE_MAGICS = {
+    #null
+    b"\x00",
+    # Images
+    b"\x89PNG\r\n\x1a\n",          # PNG
+    b"\xff\xd8\xff",               # JPEG
+    b"GIF87a", b"GIF89a",           # GIF
+    b"BM",                          # BMP
+    b"RIFF",                        # WEBP / AVI / WAV (needs RIFF check)
+
+    # Documents
+    b"%PDF",                       # PDF
+    b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",  # Old MS Office (DOC, XLS, PPT)
+    b"PK\x03\x04",                 # ZIP / DOCX / XLSX / JAR / APK / ODT
+    b"{\\rtf",                     # RTF
+
+    # Archives / compression
+    b"\x1f\x8b",                   # GZIP
+    b"BZh",                        # BZIP2
+    b"\xfd7zXZ",                   # XZ
+    b"7z\xbc\xaf\x27\x1c",         # 7-Zip
+    b"Rar!",                       # RAR
+
+    # Executables / binaries
+    b"MZ",                         # Windows EXE / DLL
+    b"\x7fELF",                    # Linux ELF
+    b"\xcf\xfa\xed\xfe",           # Mach-O (macOS)
+    b"\xca\xfe\xba\xbe",           # Mach-O fat
+    b"\xfe\xed\xfa\xce",           # Mach-O (32-bit)
+    b"\xfe\xed\xfa\xcf",           # Mach-O (64-bit)
+
+    # Media
+    b"OggS",                       # OGG
+    b"ID3",                        # MP3
+    b"fLaC",                       # FLAC
+    b"\x00\x00\x00\x18ftyp",       # MP4
+    b"\x00\x00\x00 ftyp",
+
+    # Fonts
+    b"\x00\x01\x00\x00",           # TTF
+    b"OTTO",                       # OTF
+    b"wOFF", b"wOF2",               # WOFF / WOFF2
+
+    # SQLite (often named .db/.txt in tests)
+    b"SQLite format 3\x00",
+}
