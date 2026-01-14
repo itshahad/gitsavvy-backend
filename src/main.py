@@ -1,17 +1,13 @@
 #root of the project, which inits the FastAPI app
 from fastapi import FastAPI
 from dotenv import load_dotenv
+from database import engine, Base
+from indexer.models import *
+from indexer.router import router
 
 load_dotenv()
 
 app = FastAPI()
-
-
-# @app.get("/")
-# async def root():
-#     return {"message": "Hello World"}
-
-
-from indexer.router import router
-
 app.include_router(router=router)
+Base.metadata.drop_all(engine)
+Base.metadata.create_all(engine)
