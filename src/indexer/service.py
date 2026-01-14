@@ -5,6 +5,7 @@ from tree_sitter_language_pack import get_parser
 from .constants import *
 from .config import *
 from .utils import *
+from .schemas import *
 
 class IndexerService:
     #==================================================================================================
@@ -12,7 +13,8 @@ class IndexerService:
     def get_repo_metadata(self,owner:str, repo_name:str) -> str:
         r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers())
         r.raise_for_status()
-        return r.json()
+        repo_metadata = RepositoryMetadata.model_validate(r.json())
+        return repo_metadata
 
     def download_repo(owner, repo_name, branch_name="main") -> str:
         file_path = Path(f"{REPOS_PATH}/{repo_name}.zip")

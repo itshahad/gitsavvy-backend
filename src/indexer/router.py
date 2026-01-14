@@ -24,11 +24,11 @@ router = APIRouter()
 
 @router.get("/")
 def test():
-    # return get_repo_metadata("django", "django")
     # return download_repo("octocat", "Hello-World", "master")
     # return download_repo("shahadio", "quizu")
     # return is_selected("/gitsavvy-backend/src/cindexe/router.py")
     # return select_repo_files("repos/django.zip", "django")
     # return chunk_text_files(file_path="repos/django/django-django-f3b982f/docs/index.txt", chunk_size=20, overlapping=5)
     indx=IndexerService()
+    return indx.get_repo_metadata("django", "django")
     return indx.chunk_repo_files(zip_file_path="repos/quizu.zip", repo_name="quizu")
