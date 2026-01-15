@@ -60,8 +60,7 @@ class IndexerService:
         file_data = FileCreate.model_validate(data)
         file_db = File(**file_data.model_dump())
         session.add(file_db)
-        session.commit()
-        session.refresh(file_db)
+        session.flush()
         return file_db
 
     def select_repo_files(self, session: Session, repo_id: int, zip_file_path: str, repo_name, commit_sha: str, max_size:int=200_000): # 200KB per file
@@ -77,7 +76,7 @@ class IndexerService:
                     zip.extract(info.filename, extract_dir)
                     file = self.store_file_to_db(session, repo_id, commit_sha, zip, info)
                     selected_files.append(FileRead.model_validate(file))
-
+            session.commit()
         return selected_files
     #==================================================================================================
     #files chunking:
