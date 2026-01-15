@@ -1,4 +1,5 @@
 import requests
+from requests import HTTPError
 from pathlib import Path
 from zipfile import ZipFile
 from tree_sitter_language_pack import get_parser
@@ -6,15 +7,26 @@ from .constants import *
 from .config import *
 from .utils import *
 from .schemas import *
+from .models import *
+from .exceptions import *
+from sqlalchemy.orm import Session
 
 class IndexerService:
     #==================================================================================================
     #Github:
-    def get_repo_metadata(self,owner:str, repo_name:str) -> str:
-        r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers())
-        r.raise_for_status()
-        repo_metadata = RepositoryMetadata.model_validate(r.json())
-        return repo_metadata
+    def get_repo_metadata(self,owner:str, repo_name:str, session: Session) -> str:
+        try:
+            r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers())
+            r.raise_for_status()
+            repo_metadata = RepositoryMetadata.model_validate(r.json())
+            repo_data = Repository(owner=repo_metadata.owner,name=repo_metadata.name,description=repo_metadata.description, url=str(repo_metadata.url), forks_count= repo_metadata.forks_count, open_issues_count= repo_metadata.open_issues_count,default_branch= repo_metadata.default_branch, avatar_url= str(repo_metadata.avatar_url))
+            session.add(repo_data)
+            session.commit()
+            session.refresh(repo_data)
+            return repo_data
+        except HTTPError as e:
+            if r.status_code == 404:
+                raise RepoNotFoundError(owner, repo_name)
 
     def download_repo(owner, repo_name, branch_name="main") -> str:
         file_path = Path(f"{REPOS_PATH}/{repo_name}.zip")

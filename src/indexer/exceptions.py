@@ -1,7 +1,6 @@
-#module specific exceptions, e.g. PostNotFound, InvalidUserData
+from fastapi import HTTPException, status
 
-# from fastapi import HTTPException, status
+class RepoNotFoundError(Exception):
+    def __init__(self, owner: str, repo: str):
+        super().__init__(f"Repository {owner}/{repo} not found")
 
-# class FeatureException(HTTPException):
-#     def __init__(self, detail="Feature error"):
-#         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
