@@ -18,28 +18,53 @@ class IndexerService:
         try:
             r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers())
             r.raise_for_status()
-            repo_metadata = RepositoryMetadata.model_validate(r.json())
-            repo_data = Repository(owner=repo_metadata.owner,name=repo_metadata.name,description=repo_metadata.description, url=str(repo_metadata.url), forks_count= repo_metadata.forks_count, open_issues_count= repo_metadata.open_issues_count,default_branch= repo_metadata.default_branch, avatar_url= str(repo_metadata.avatar_url))
+            repo_metadata = RepoCreate.model_validate(r.json())
+            repo_data = Repository(**repo_metadata.model_dump(exclude={"topics", "url", "avatar_url", "language"}), url=str(repo_metadata.url), avatar_url= str(repo_metadata.avatar_url))
             session.add(repo_data)
+            session.flush() #to get an id
+            session.add_all([
+                RepositoryTopic(repository_id=repo_data.id, topic=t)
+                for t in repo_metadata.topics
+            ])
             session.commit()
             session.refresh(repo_data)
-            return repo_data
+            return RepoRead.model_validate(repo_data)
         except HTTPError as e:
             if r.status_code == 404:
                 raise RepoNotFoundError(owner, repo_name)
 
-    def download_repo(owner, repo_name, branch_name="main") -> str:
+    def download_repo(self, owner, repo_name) -> dict:
+        commits =  requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits", headers=headers())
+        commits.raise_for_status()
+        latest_commit = commits.json()[0]["sha"]
+
         file_path = Path(f"{REPOS_PATH}/{repo_name}.zip")
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/zipball/{branch_name}", headers=headers())
+        r = requests.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/zipball/{latest_commit}", headers=headers())
         r.raise_for_status()
         with open(file_path, mode="wb") as file:
             file.write(r.content)
-        return str(file_path)
+
+        return{"path": str(file_path), "commit_sha": latest_commit}
 
     #==================================================================================================
     #file selection:
-    def select_repo_files(self,zip_file_path: str, repo_name, max_size:int=200_000): # 200KB per file
+    def store_file_to_db(self, session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info :ZipInfo):
+        content_hash = hash_file_content(zip_file, info) 
+        data = {
+            "repository_id" : repo_id,
+            "commit_sha": commit_sha,
+            "file_path": info.filename,
+            "content_hash": content_hash
+        }
+        file_data = FileCreate.model_validate(data)
+        file_db = File(**file_data.model_dump())
+        session.add(file_db)
+        session.commit()
+        session.refresh(file_db)
+        return file_db
+
+    def select_repo_files(self, session: Session, repo_id: int, zip_file_path: str, repo_name, commit_sha: str, max_size:int=200_000): # 200KB per file
         selected_files = []
         extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
 
@@ -48,11 +73,11 @@ class IndexerService:
                 if info.is_dir() or info.file_size > max_size:
                     continue
 
-                if not is_skipped(info.filename) and is_selected(info.filename):
-                    selected_files.append(info.filename)
+                if not is_skipped(info.filename) and not is_binary(zip, info.filename) and is_selected(info.filename):
+                    zip.extract(info.filename, extract_dir)
+                    file = self.store_file_to_db(session, repo_id, commit_sha, zip, info)
+                    selected_files.append(FileRead.model_validate(file))
 
-            for path in selected_files:
-                zip.extract(path, extract_dir)
         return selected_files
     #==================================================================================================
     #files chunking:
@@ -179,10 +204,6 @@ class IndexerService:
         chunks = []
         selected_files = self.select_repo_files(zip_file_path, repo_name)
         for file_path in selected_files:
-            if is_binary(f"{REPOS_PATH}/{repo_name}/{file_path}"):
-                print(f"BINARY -> {file_path}")
-                continue
-
             e = ext(file_path)
 
             if e in AST_LANG_EXT:

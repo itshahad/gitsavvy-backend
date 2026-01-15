@@ -28,13 +28,11 @@ router = APIRouter()
 @router.get("/")
 def test(session: Session = Depends(get_db)):
     try:
-        # return download_repo("octocat", "Hello-World", "master")
-        # return download_repo("shahadio", "quizu")
-        # return is_selected("/gitsavvy-backend/src/cindexe/router.py")
-        # return select_repo_files("repos/django.zip", "django")
-        # return chunk_text_files(file_path="repos/django/django-django-f3b982f/docs/index.txt", chunk_size=20, overlapping=5)
         indx=IndexerService()
         return indx.get_repo_metadata("django", "django", session)
+        # return indx.download_repo("django", "django")
+        return indx.select_repo_files(session, repo_id=1, zip_file_path="repos/django.zip", repo_name="django", commit_sha="a876ada18b622926db5c7a9f3ec6ee20df223818")
+        # return chunk_text_files(file_path="repos/django/django-django-f3b982f/docs/index.txt", chunk_size=20, overlapping=5)
         return indx.chunk_repo_files(zip_file_path="repos/quizu.zip", repo_name="quizu")
     except RepoNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

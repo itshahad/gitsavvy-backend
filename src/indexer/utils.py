@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 from .constants import *
+from zipfile import ZipFile, ZipInfo
+import hashlib
+
 
 def norm(p: str) -> str:
     return p.replace("\\", "/").lower()
@@ -71,11 +74,22 @@ def unwrap_function(wrapper):
             return child
     return None
 
-def is_binary(file_path: str, sample_size: int=4096):
-    data = Path(file_path).read_bytes()[:sample_size]
-    
-    for magic in BINARY_FILE_MAGICS:
-        if data.startswith(magic):
-            return True
-    
+def is_binary(zip_file: ZipFile, info :ZipInfo, sample_size: int=4096):
+    with zip_file.open(info) as f:
+        data = f.read(sample_size)
+        
+        for magic in BINARY_FILE_MAGICS:
+            if data.startswith(magic):
+                return True   
     return False
+
+def hash_file_content(zip_file: ZipFile, info :ZipInfo):
+    BUF_SIZE = 65536
+    content_hash = hashlib.sha1()
+    with zip_file.open(info, "r") as f:
+        while True:
+            data = f.read(BUF_SIZE)
+            if not data:
+                break
+            content_hash.update(data)
+    return content_hash.hexdigest()

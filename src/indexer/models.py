@@ -36,13 +36,12 @@ class File(Base):
 
     commit_sha: Mapped[str] 
     file_path: Mapped[str]
-    language: Mapped[str]
     content_hash: Mapped[str] = mapped_column(nullable=True)
 
     chunks: Mapped[List["Chunk"]] = relationship(back_populates="file")
 
     def __repr__(self):
-        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, language={self.language!r}, content_hash={self.content_hash!r})"
+        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
 
 
 class ChunkType(Enum):
