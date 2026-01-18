@@ -81,4 +81,6 @@ class ChunkCreate(ChunkModel):
     pass 
 
 class ChunkRead(ChunkModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int

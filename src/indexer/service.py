@@ -94,11 +94,12 @@ class IndexerService:
         return selected_files
     #==================================================================================================
     #files chunking:
-    def chunk_text_files(self,file_path: str, chunk_size= 100, overlapping=20):
+    def chunk_text_files(self,session, file: FileRead, repo_name: str, chunk_size= 100, overlapping=20):
         if (overlapping >= chunk_size):
             raise ValueError("overlapping value must be less than chunk_size")
         
         chunks = []
+        file_path = file_complete_path(file.file_path, repo_name)
 
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -107,13 +108,17 @@ class IndexerService:
 
         for i in range(0, len(lines), step):
             chunk = lines[i: i + chunk_size]
-            chunks.append({
-                "file_path": file_path,
+            text = "\n".join(chunk).strip()
+            data = {
+                "file_id" : file.id,
+                "type": ChunkType.TEXT.value,
                 "start_line": i + 1,
                 "end_line": min(i + chunk_size, len(lines)),
-                "code_text": "\n".join(chunk).strip(),
-            })
-        
+                "content": text,
+                "content_hash": hash_text(text)
+            }
+            db_chunk = self.store_chunk_in_db(session, data)
+            chunks.append(ChunkRead.model_validate(db_chunk))
         return chunks
     #--------------------------------------------------------------------------------------------------
     #code files chunking:
@@ -191,7 +196,7 @@ class IndexerService:
                     "chunk_parent_id": chunk_parent_id
                 }
             db_chunk = self.store_chunk_in_db(session, data)
-            chunks_list.append(db_chunk)
+            chunks_list.append(ChunkRead.model_validate(db_chunk))
             for child in node.children:
                 self.visit_node(child, src, chunks_list, file, session,chunk_parent_id)
             return
@@ -207,7 +212,7 @@ class IndexerService:
                     "chunk_parent_id":chunk_parent_id,
                 }
             db_chunk = self.store_chunk_in_db(session, data)
-            chunks_list.append(db_chunk)
+            chunks_list.append(ChunkRead.model_validate(db_chunk))
             for child in node.children:
                 self.visit_node(child, src, chunks_list, file, session, db_chunk.id)
             return
@@ -227,7 +232,7 @@ class IndexerService:
         root = tree.root_node
 
         db_file_chunk =self.build_file_summary(file_bytes, root, file, session)
-        chunks.append(db_file_chunk)
+        chunks.append(ChunkRead.model_validate(db_file_chunk))
         self.visit_node(root, file_bytes, chunks, file, session, chunk_parent_id=db_file_chunk.id)
             
         return chunks
@@ -251,6 +256,6 @@ class IndexerService:
                 chunks.append(self.chunk_code_files(file, repo_name, session))
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file.file_path}")
-                chunks.append(self.chunk_text_files(file_complete_path(file.file_path, repo_name)) )
+                chunks.append(self.chunk_text_files(session, file, repo_name))
         session.commit()      
         return chunks
