@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
 from pydantic.aliases import AliasPath
 import re
+from models import ChunkType
+from utils import validate_sha
 
 class RepositoryTopicModel(BaseModel):
     pass
@@ -39,7 +41,6 @@ class RepoRead(RepositoryMetadataModel):
 
 #====================================================================
 
-SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 
 class RepoFileModel(BaseModel):
     repository_id : int
@@ -49,10 +50,8 @@ class RepoFileModel(BaseModel):
 
     @field_validator("commit_sha","content_hash", mode='after')
     @classmethod
-    def validate_sha(cls, v: str) -> str:
-        if not SHA1_RE.match(v):
-            raise ValueError("commit_sha must be a 40-char hex SHA1")
-        return v
+    def validate_commit_content(cls, v: str) -> str:
+       return validate_sha(v)
 
 class FileCreate(RepoFileModel):
     pass
@@ -64,5 +63,17 @@ class FileRead(RepoFileModel):
 
 #====================================================================
 
-class Chunk(BaseModel): 
-    pass
+class ChunkModel(BaseModel): 
+    file_id: int
+    chunk_parent_id : int
+    start_line : int
+    end_line: int
+    type : ChunkType
+    content : str
+    embedding_vector: list[int] | None = None
+    content_hash: str | None = None
+
+    @field_validator("content_hash", mode='after')
+    @classmethod
+    def validate_commit_content(cls, v: str) -> str:
+       return validate_sha(v)

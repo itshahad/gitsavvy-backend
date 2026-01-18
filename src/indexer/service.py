@@ -10,6 +10,8 @@ from .schemas import *
 from .models import *
 from .exceptions import *
 from sqlalchemy.orm import Session
+from sqlalchemy import select
+
 
 class IndexerService:
     #==================================================================================================
@@ -199,16 +201,21 @@ class IndexerService:
         return chunks
     #--------------------------------------------------------------------------------------------------
 
-    def chunk_repo_files(self, zip_file_path:str, repo_name:str):
+    def chunk_repo_files(self, session, zip_file_path:str, repo_name:str):
         chunks = []
-        selected_files = self.select_repo_files(zip_file_path, repo_name)
+        current_file = None
+        stmt = lambda x : select(File).where(File.file_path == x)
+        selected_files = self.select_repo_files(zip_file_path, repo_name)[:10]
+
         for file_path in selected_files:
+            current_file = session.execute(stmt(file_path)).scaler_one()
+            print(current_file)
             e = ext(file_path)
 
             if e in AST_LANG_EXT:
                 print(f"AST_LANG_EXT -> {file_path}")
-                chunks.append(self.chunk_code_files(f"{REPOS_PATH}/{repo_name}/{file_path}"))
+                chunks.append(self.chunk_code_files(file_complete_path(file_path, repo_name)))
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file_path}")
-                chunks.append(self.chunk_text_files(f"{REPOS_PATH}/{repo_name}/{file_path}") )           
+                chunks.append(self.chunk_text_files(file_complete_path(file_path, repo_name)) )           
         return chunks

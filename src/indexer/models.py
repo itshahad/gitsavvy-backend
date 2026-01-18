@@ -3,6 +3,12 @@ from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON
 from typing import List
 from enum import Enum
 
+class ChunkType(Enum):
+    FUNCTION = "function"
+    CLASS_SUMMARY = "class_summary"
+    FILE_SUMMARY = "file_summary"
+    TEXT = "text"
+
 class Base(DeclarativeBase):
     pass
 
@@ -42,13 +48,6 @@ class File(Base):
 
     def __repr__(self):
         return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
-
-
-class ChunkType(Enum):
-    FUNCTION = "function"
-    CLASS_SUMMARY = "class_summary"
-    FILE_SUMMARY = "file_summary"
-    TEXT = "text"
 
 class Chunk(Base):
     __tablename__ = "chunk"

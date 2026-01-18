@@ -1,3 +1,5 @@
+import re
+
 REPOS_PATH = "repos"
 
 SKIP_EXT = {
@@ -111,3 +113,5 @@ BINARY_FILE_MAGICS = {
     # SQLite (often named .db/.txt in tests)
     b"SQLite format 3\x00",
 }
+
+SHA1_RE = re.compile(r"^[0-9a-f]{40}$")

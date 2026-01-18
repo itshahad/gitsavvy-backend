@@ -4,6 +4,8 @@ from .constants import *
 from zipfile import ZipFile, ZipInfo
 import hashlib
 
+def file_complete_path(file_path:str, repo_name: str) -> str:
+    return f"{REPOS_PATH}/{repo_name}/{file_path}"
 
 def norm(p: str) -> str:
     return p.replace("\\", "/").lower()
@@ -93,3 +95,8 @@ def hash_file_content(zip_file: ZipFile, info :ZipInfo):
                 break
             content_hash.update(data)
     return content_hash.hexdigest()
+
+def validate_sha(v: str) -> str:
+    if not SHA1_RE.match(v):
+        raise ValueError("SHA1 must be a 40-char hex")
+    return v
