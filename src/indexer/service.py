@@ -172,37 +172,49 @@ class IndexerService:
         } 
         stored_chunk = self.store_chunk_in_db(session, data)
         print(f"stored_chunk -> {stored_chunk}")
-        return stored_chunk.id
+        return stored_chunk
 
 
-    def visit_node(self, node, src: bytes, chunks_list: list, file_path: str):
+    def visit_node(self, node, src: bytes, chunks_list: list, file: FileRead, session:Session, chunk_parent_id: int | None = None):
         is_fn = is_function(node)
         is_cls = is_class(node)
 
         if is_fn:
-            chunks_list.append(
-                {
-                    "type": "function",
-                    "file_path": file_path,
+            text = node_text(src, node)
+            data = {
+                    "file_id" : file.id,
+                    "type": ChunkType.FUNCTION.value,
                     "start_line": node.start_point[0]+1,
                     "end_line": node.end_point[0]+1,
-                    "code_text": node_text(src, node),
-                    "node_type": node.type
+                    "content": text,
+                    "content_hash": hash_text(text),
+                    "chunk_parent_id": chunk_parent_id
                 }
-            )
+            db_chunk = self.store_chunk_in_db(session, data)
+            chunks_list.append(db_chunk)
+            for child in node.children:
+                self.visit_node(child, src, chunks_list, file, session,chunk_parent_id)
+            return
         elif is_cls:
-            chunks_list.append(
-                {
-                    "type": "class_summary",
-                    "file_path": file_path,
+            text = self.build_class_summary(src, node)
+            data = {
+                    "file_id" : file.id,
+                    "type": ChunkType.CLASS_SUMMARY.value,
                     "start_line": node.start_point[0]+1,
                     "end_line": node.end_point[0]+1,
-                    "code_text": self.build_class_summary(src, node),
-                    "node_type": node.type
+                    "content": text,
+                    "content_hash": hash_text(text),
+                    "chunk_parent_id":chunk_parent_id,
                 }
-            )
+            db_chunk = self.store_chunk_in_db(session, data)
+            chunks_list.append(db_chunk)
+            for child in node.children:
+                self.visit_node(child, src, chunks_list, file, session, db_chunk.id)
+            return
+            
+
         for child in node.children:
-            self.visit_node(child, src, chunks_list, file_path)
+            self.visit_node(child, src, chunks_list, file, session, chunk_parent_id)
 
     def chunk_code_files(self, file: FileRead, repo_name: str ,session: Session):
         chunks = []
@@ -214,8 +226,9 @@ class IndexerService:
         tree = parser.parse(file_bytes)
         root = tree.root_node
 
-        chunks.append(self.build_file_summary(file_bytes, root, file, session))
-        self.visit_node(root, file_bytes, chunks, file_path)
+        db_file_chunk =self.build_file_summary(file_bytes, root, file, session)
+        chunks.append(db_file_chunk)
+        self.visit_node(root, file_bytes, chunks, file, session, chunk_parent_id=db_file_chunk.id)
             
         return chunks
     #--------------------------------------------------------------------------------------------------
@@ -228,7 +241,7 @@ class IndexerService:
 
     def chunk_repo_files(self, session, zip_file_path:str, repo_id:int, commit_sha:str, repo_name:str):
         chunks = []
-        selected_files = self.select_repo_files(session, repo_id, zip_file_path, repo_name, commit_sha)[60:65]
+        selected_files = self.select_repo_files(session, repo_id, zip_file_path, repo_name, commit_sha)
 
         for file in selected_files:
             e = ext(file.file_path)
@@ -238,5 +251,6 @@ class IndexerService:
                 chunks.append(self.chunk_code_files(file, repo_name, session))
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file.file_path}")
-                chunks.append(self.chunk_text_files(file_complete_path(file.file_path, repo_name)) )           
+                chunks.append(self.chunk_text_files(file_complete_path(file.file_path, repo_name)) )
+        session.commit()      
         return chunks
