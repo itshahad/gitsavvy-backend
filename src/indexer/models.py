@@ -61,8 +61,8 @@ class Chunk(Base):
     chunk_parent: Mapped["Chunk"] = relationship(back_populates="children_chunks", remote_side=[id])
     children_chunks: Mapped[List["Chunk"]] = relationship(back_populates="chunk_parent", cascade="all, delete-orphan")
 
-    start_line: Mapped[int] 
-    end_line: Mapped[int] 
+    start_line: Mapped[int] = mapped_column(nullable=True)
+    end_line: Mapped[int] = mapped_column(nullable=True)
     type: Mapped['ChunkType'] = mapped_column(SqlEnum(ChunkType))
     content: Mapped[str]
     embedding_vector: Mapped[List[int]] = mapped_column(JSON, nullable=True)

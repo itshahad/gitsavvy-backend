@@ -29,11 +29,11 @@ router = APIRouter()
 def test(session: Session = Depends(get_db)):
     try:
         indx=IndexerService()
-        return indx.get_repo_metadata("django", "django", session)
+        # return indx.get_repo_metadata("django", "django", session)
         # return indx.download_repo("django", "django")
-        return indx.select_repo_files(session, repo_id=1, zip_file_path="repos/django.zip", repo_name="django", commit_sha="a876ada18b622926db5c7a9f3ec6ee20df223818")
+        # return indx.select_repo_files(session, repo_id=1, zip_file_path="repos/django.zip", repo_name="django", commit_sha="0d31ca98830542088299d2078402891d08cc3a65")
         # return chunk_text_files(file_path="repos/django/django-django-f3b982f/docs/index.txt", chunk_size=20, overlapping=5)
-        return indx.chunk_repo_files(zip_file_path="repos/quizu.zip", repo_name="quizu")
+        return indx.chunk_repo_files(session, zip_file_path="repos/django.zip", repo_name="django", repo_id=1,commit_sha="0d31ca98830542088299d2078402891d08cc3a65")
     except RepoNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

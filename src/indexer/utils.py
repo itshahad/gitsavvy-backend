@@ -96,6 +96,12 @@ def hash_file_content(zip_file: ZipFile, info :ZipInfo):
             content_hash.update(data)
     return content_hash.hexdigest()
 
+def hash_text(text:str):
+    normalized = text.replace("\r\n", "\n").strip()
+    content_hash = hashlib.sha1()
+    content_hash.update(normalized.encode("utf-8", errors="replace"))
+    return content_hash.hexdigest()
+
 def validate_sha(v: str) -> str:
     if not SHA1_RE.match(v):
         raise ValueError("SHA1 must be a 40-char hex")

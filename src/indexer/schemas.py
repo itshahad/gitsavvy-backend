@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
 from pydantic.aliases import AliasPath
 import re
-from models import ChunkType
-from utils import validate_sha
+from .models import ChunkType
+from .utils import validate_sha
 
 class RepositoryTopicModel(BaseModel):
     pass
@@ -58,16 +58,15 @@ class FileCreate(RepoFileModel):
 
 class FileRead(RepoFileModel):
     model_config = ConfigDict(from_attributes=True) 
-
     id: int
 
 #====================================================================
 
 class ChunkModel(BaseModel): 
     file_id: int
-    chunk_parent_id : int
-    start_line : int
-    end_line: int
+    chunk_parent_id : int | None = None
+    start_line : int | None = None
+    end_line: int | None = None
     type : ChunkType
     content : str
     embedding_vector: list[int] | None = None
@@ -77,3 +76,9 @@ class ChunkModel(BaseModel):
     @classmethod
     def validate_commit_content(cls, v: str) -> str:
        return validate_sha(v)
+    
+class ChunkCreate(ChunkModel):
+    pass 
+
+class ChunkRead(ChunkModel):
+    id: int

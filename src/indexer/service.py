@@ -51,6 +51,14 @@ class IndexerService:
 
     #==================================================================================================
     #file selection:
+    def get_file_from_db(self, session: Session, data: dict) -> bool:
+        stmt = select(File).where(File.repository_id == data["repository_id"], File.commit_sha == data["commit_sha"], File.file_path == data["file_path"])
+        result = session.execute(stmt).first()
+        if result is not None:
+            return result[0]
+        else: 
+            return None
+
     def store_file_to_db(self, session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info :ZipInfo):
         content_hash = hash_file_content(zip_file, info) 
         data = {
@@ -59,11 +67,15 @@ class IndexerService:
             "file_path": info.filename,
             "content_hash": content_hash
         }
-        file_data = FileCreate.model_validate(data)
-        file_db = File(**file_data.model_dump())
-        session.add(file_db)
-        session.flush()
-        return file_db
+        file_from_db = self.get_file_from_db(session, data)
+        if file_from_db is not None:
+            return file_from_db
+        else:
+            file_data = FileCreate.model_validate(data)
+            file_db = File(**file_data.model_dump())
+            session.add(file_db)
+            session.flush()
+            return file_db
 
     def select_repo_files(self, session: Session, repo_id: int, zip_file_path: str, repo_name, commit_sha: str, max_size:int=200_000): # 200KB per file
         selected_files = []
@@ -127,7 +139,7 @@ class IndexerService:
                     methods.append(method_signature(src, wrapped_function))
                     continue
 
-                # if this node is just a wrapper and has children, don’t treat it as a class member itself let recursion handle its children
+                # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
                 if not child.is_named and child.children:
                     continue
                 
@@ -139,9 +151,8 @@ class IndexerService:
             parts.append("\nMethods:\n+" + "\n".join(f"- {m}" for m in methods))
         return "\n".join(parts).strip()
 
-    def build_file_summary(self, src: bytes, root, file_path: str):
+    def build_file_summary(self, src: bytes, root, file: FileRead, session: Session):
         parts = []
-
         for child in root.children:
             if is_class(child) or is_function(child):
                 break
@@ -150,11 +161,18 @@ class IndexerService:
             if not text:
                 continue
             parts.append(text)
-        return {
-            "type": "file_summary",
-            "path": file_path,
-            "text": "\n".join(parts).strip(),
+
+        text = "\n".join(parts).strip()
+        print(file)
+        data = {
+            "file_id" : file.id,
+            "type": ChunkType.FILE_SUMMARY.value,
+            "content": text,
+            "content_hash": hash_text(text)
         } 
+        stored_chunk = self.store_chunk_in_db(session, data)
+        print(f"stored_chunk -> {stored_chunk}")
+        return stored_chunk.id
 
 
     def visit_node(self, node, src: bytes, chunks_list: list, file_path: str):
@@ -186,8 +204,9 @@ class IndexerService:
         for child in node.children:
             self.visit_node(child, src, chunks_list, file_path)
 
-    def chunk_code_files(self, file_path: str):
+    def chunk_code_files(self, file: FileRead, repo_name: str ,session: Session):
         chunks = []
+        file_path =file_complete_path(file.file_path, repo_name)
         file_bytes = Path(file_path).read_bytes()
         lang = "python"
         parser = get_parser(language_name=lang)
@@ -195,27 +214,29 @@ class IndexerService:
         tree = parser.parse(file_bytes)
         root = tree.root_node
 
-        chunks.append(self.build_file_summary(file_bytes, root, file_path))
+        chunks.append(self.build_file_summary(file_bytes, root, file, session))
         self.visit_node(root, file_bytes, chunks, file_path)
             
         return chunks
     #--------------------------------------------------------------------------------------------------
+    def store_chunk_in_db(self, session:Session, data: dict):
+        chunk_data = ChunkCreate.model_validate(data)
+        chunk_db = Chunk(**chunk_data.model_dump())
+        session.add(chunk_db)
+        session.flush()
+        return chunk_db
 
-    def chunk_repo_files(self, session, zip_file_path:str, repo_name:str):
+    def chunk_repo_files(self, session, zip_file_path:str, repo_id:int, commit_sha:str, repo_name:str):
         chunks = []
-        current_file = None
-        stmt = lambda x : select(File).where(File.file_path == x)
-        selected_files = self.select_repo_files(zip_file_path, repo_name)[:10]
+        selected_files = self.select_repo_files(session, repo_id, zip_file_path, repo_name, commit_sha)[60:65]
 
-        for file_path in selected_files:
-            current_file = session.execute(stmt(file_path)).scaler_one()
-            print(current_file)
-            e = ext(file_path)
+        for file in selected_files:
+            e = ext(file.file_path)
 
             if e in AST_LANG_EXT:
-                print(f"AST_LANG_EXT -> {file_path}")
-                chunks.append(self.chunk_code_files(file_complete_path(file_path, repo_name)))
+                print(f"AST_LANG_EXT -> {file.file_path}")
+                chunks.append(self.chunk_code_files(file, repo_name, session))
             elif e in TEXT_LANG_EXT:
-                print(f"TEXT_LANG_EXT -> {file_path}")
-                chunks.append(self.chunk_text_files(file_complete_path(file_path, repo_name)) )           
+                print(f"TEXT_LANG_EXT -> {file.file_path}")
+                chunks.append(self.chunk_text_files(file_complete_path(file.file_path, repo_name)) )           
         return chunks
