@@ -32,5 +32,26 @@ services:
     depends_on:
       - db
 
+  redis:
+      image: redis:7-alpine
+      ports:
+        - "6379:6379"
+
+  gpu_worker:
+    build:
+      context: ./src/indexer
+      dockerfile: ./Dockerfile.gpu-worker
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - redis
 volumes:
   pgdata:

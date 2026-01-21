@@ -1,0 +1,19 @@
+# Use CUDA 12.1 with Python 3.10
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
+
+# Install Python and essential build tools
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app/
+
+COPY ./requirements.txt /usr/src/app/requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy the app code
+COPY . /usr/src/app/
+
+# Run the worker with solo pool for GPU tasks
+CMD ["celery", "-A", "app.celery_config.celery_app", "worker", "--loglevel=info", "--pool=solo", "-Q", "gpu_queue"]
