@@ -16,6 +16,7 @@ services:
   api:
     build:
       context: ./src
+      dockerfile: ../docker/api.Dockerfile
     container_name: gitsavvy_fastapi
     volumes:
       - ./src:/usr/src/app
@@ -40,7 +41,8 @@ services:
   gpu_worker:
     build:
       context: ./src
-      dockerfile: ./indexer/Dockerfile.gpu-worker
+      dockerfile: ../docker/gpu-worker.Dockerfile
+    container_name: gpu-worker
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1

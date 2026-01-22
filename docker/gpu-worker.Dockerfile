@@ -8,12 +8,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/app/
 
+# install dependencies
+RUN pip install --upgrade pip
 COPY ./requirements.txt /usr/src/app/requirements.txt
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install  --no-cache-dir -r requirements.txt
 
 # Copy the app code
-COPY ./indexer /usr/src/app/indexer/
-COPY ./common /usr/src/app/common/
+COPY . /usr/src/app/
 
 # Run the worker with solo pool for GPU tasks
-CMD ["celery", "-A", "common.worker.worker", "worker", "--loglevel=info", "--pool=solo", "-Q", "gpu_queue"]
+CMD ["celery", "-A", "worker.worker", "worker", "--loglevel=info", "--pool=solo", "-Q", "gpu_queue"]
