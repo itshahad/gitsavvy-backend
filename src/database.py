@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 import os
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 USERNAME = os.getenv("DB_USERNAME", "postgres")
 PASSWORD = os.getenv("DB_PASSWORD", "postgres")
@@ -22,3 +23,5 @@ def get_db():
     finally:
         db.close()
 
+class Base(DeclarativeBase):
+    pass

@@ -2,8 +2,8 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from database import engine, Base
-from indexer.models import *
-from indexer.router import router
+from features.indexer.models import *
+from features.indexer.router import router
 
 load_dotenv()
 

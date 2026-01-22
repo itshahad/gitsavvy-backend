@@ -1,7 +1,8 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON
 from typing import List
 from enum import Enum
+from models import BaseModel
 
 class ChunkType(Enum):
     FUNCTION = "function"
@@ -9,10 +10,8 @@ class ChunkType(Enum):
     FILE_SUMMARY = "file_summary"
     TEXT = "text"
 
-class Base(DeclarativeBase):
-    pass
 
-class Repository(Base):
+class Repository(BaseModel):
     __tablename__ = "repository"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -32,7 +31,7 @@ class Repository(Base):
         return f"Repository(id={self.id!r}, owner={self.owner!r}, name={self.name!r}, description={self.description!r}, url={self.url!r}, forks_count={self.forks_count!r}, open_issues_count={self.open_issues_count!r}, default_branch={self.default_branch!r}, avatar_url={self.avatar_url!r})"
     
 
-class File(Base):
+class File(BaseModel):
     __tablename__ = "file"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -49,7 +48,7 @@ class File(Base):
     def __repr__(self):
         return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
 
-class Chunk(Base):
+class Chunk(BaseModel):
     __tablename__ = "chunk"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -71,7 +70,7 @@ class Chunk(Base):
     def __repr__(self):
         return f"Chunk(id={self.id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_line={self.start_line!r}, end_line={self.end_line!r}, type={self.type!r}, content={self.content!r}, embedding_vector={self.embedding_vector!r}, content_hash={self.content_hash!r})"
     
-class RepositoryTopic(Base):
+class RepositoryTopic(BaseModel):
     __tablename__ = "repository_topic"
 
     id: Mapped[int] = mapped_column(primary_key=True)
