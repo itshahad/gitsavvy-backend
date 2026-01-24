@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 from .service import IndexerService
 from database import SessionLocal
 
-
-@worker.task(name="indexer.entry", queue="gpu_queue")
+@worker.task
 def indexer():
     session = SessionLocal()
     indx = IndexerService()

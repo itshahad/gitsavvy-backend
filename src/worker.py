@@ -1,19 +1,35 @@
 from celery import Celery
-import os
-
-worker = Celery(__name__)
-
-worker.conf.update(
-    broker_url=os.environ.get(
-        "CELERY_BROKER_URL", "redis://localhost:6379"),
-    result_backend=os.environ.get(
-        "CELERY_RESULT_BACKEND", "redis://localhost:6379"),
-)
-
-worker.conf.worker_send_task_events = True
-worker.conf.task_send_sent_event = True
+from config import BROKER_URL, RESULT_BACKEND, INCLUDE_TASKS
+from kombu import Queue
 
 
-worker.autodiscover_tasks([
-    "features.indexer",
-])
+def make_celery(include_task: bool):
+    worker = Celery(__name__)
+
+    worker.conf.update(
+        broker_url=BROKER_URL,
+        result_backend=RESULT_BACKEND,
+        #if no queue defined, where the tasks should be routed? 
+        task_default_queue="queue1",
+        task_default_routing_key="queue1",
+        #what are the queues that handled with this worker? 
+        task_queues = (
+            Queue("queue1", routing_key="queue1"),
+        ),
+        #defining queues for tasks:
+        task_routes={
+            "features.indexer.tasks.*": {"queue": "queue1", "routing_key": "queue1"},
+        },
+    )
+    
+    if(include_task):
+        worker.autodiscover_tasks([
+            "features.indexer",
+        ])
+    
+    return worker
+
+worker = make_celery(INCLUDE_TASKS == "1")
+
+
+#for now we gonna work on solo pool (no concurrency), then we increase the throughput and scale processing 

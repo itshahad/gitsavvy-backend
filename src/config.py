@@ -1,10 +1,8 @@
-#e.g. env vars
+import os
 
-# import os
-
-# PROJECT_NAME = "FastAPI Example"
-
-# DATABASE_URL = os.getenv(
-#     "DATABASE_URL",
-#     "postgresql://user:password@localhost:5432/postgres"
-# )
+BROKER_URL = os.environ.get(
+        "CELERY_BROKER_URL", "redis://localhost:6379")
+RESULT_BACKEND = os.environ.get(
+        "CELERY_RESULT_BACKEND", "redis://localhost:6379")
+INCLUDE_TASKS= os.environ.get(
+        "CELERY_INCLUDE_TASKS", "1")

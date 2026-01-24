@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from database import engine, Base
 from features.indexer.models import *
 from features.indexer.router import router
+from worker import worker
 
 load_dotenv()
 
