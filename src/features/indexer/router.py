@@ -22,13 +22,19 @@ from .service import IndexerService
 from sqlalchemy.orm import Session
 from database import get_db
 from .exceptions import RepoNotFoundError
+from features.indexer.tasks import indexer as indexer_task
+
 
 router = APIRouter()
 
 @router.get("/")
 def test(session: Session = Depends(get_db)):
     try:
-        indx=IndexerService()
+        indexer_task.delay()
+        return {
+            "yay": "yay"
+        }
+        # indx=IndexerService()
         # return indx.get_repo_metadata("django", "django", session)
         # return indx.download_repo("django", "django")
         # return indx.select_repo_files(session, repo_id=1, zip_file_path="repos/django.zip", repo_name="django", commit_sha="0d31ca98830542088299d2078402891d08cc3a65")
