@@ -1,7 +1,4 @@
-#e.g. env vars
 import os
-
-FEATURE_ENABLED = True
 
 API_URL = "https://api.github.com/"
 GITHUB_API_TOKEN = os.getenv("GITHUB_API_TOKEN")

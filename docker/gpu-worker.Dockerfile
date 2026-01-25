@@ -17,4 +17,4 @@ RUN pip install  --no-cache-dir -r requirements.txt
 COPY . /usr/src/app/
 
 # Run the worker with solo pool for GPU tasks
-CMD ["celery", "-A", "worker.worker", "worker", "--loglevel=info", "--pool=solo", "-Q", "queue1"]
+CMD ["celery", "-A", "worker.worker", "worker", "-E", "--loglevel=info", "--pool=solo", "-Q", "queue1"]

@@ -1,5 +1,5 @@
 from celery import Celery
-from config import BROKER_URL, RESULT_BACKEND, INCLUDE_TASKS
+from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_INCLUDE_TASKS
 from kombu import Queue
 
 
@@ -7,8 +7,11 @@ def make_celery(include_task: bool):
     worker = Celery(__name__)
 
     worker.conf.update(
-        broker_url=BROKER_URL,
-        result_backend=RESULT_BACKEND,
+        broker_url=CELERY_BROKER_URL,
+        result_backend=CELERY_RESULT_BACKEND,
+        worker_send_task_events=True,
+        task_send_sent_event=True,
+        task_track_started=True,
         #if no queue defined, where the tasks should be routed? 
         task_default_queue="queue1",
         task_default_routing_key="queue1",
@@ -29,7 +32,7 @@ def make_celery(include_task: bool):
     
     return worker
 
-worker = make_celery(INCLUDE_TASKS == "1")
+worker = make_celery(CELERY_INCLUDE_TASKS == "1")
 
 
 #for now we gonna work on solo pool (no concurrency), then we increase the throughput and scale processing 
