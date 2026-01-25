@@ -4,7 +4,11 @@ from .constants import *
 from zipfile import ZipFile, ZipInfo
 import hashlib
 
-def file_complete_path(file_path:str, repo_name: str) -> str:
+
+def get_repo_path(repo_name:str):
+    return Path(f"{REPOS_PATH}/{repo_name}.zip")
+
+def get_file_complete_path(file_path:str, repo_name: str) -> str:
     return f"{REPOS_PATH}/{repo_name}/{file_path}"
 
 def norm(p: str) -> str:

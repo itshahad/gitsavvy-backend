@@ -1,12 +1,41 @@
 from worker import worker
 from sqlalchemy.orm import Session
-from .service import IndexerService
 from database import SessionLocal
+import requests
+from .service import *
+from pathlib import Path
 
-@worker.task
-def indexer():
-    session = SessionLocal()
-    indx = IndexerService()
-    val = indx.get_repo_metadata("django", "django", session)
-    print(val)
+
+@worker.task(bind = True)
+def indexer(self, repo_owner:str, repo_name:str):
+    db_session = SessionLocal()
+    http = requests.session()
+
+    try:
+        repo_path = get_repo_path(repo_name=repo_name)
+        
+        self.update_state(state= "PROGRESS", meta={"step" : "metadata"})
+        repo = get_repo_metadata(http=http, session=db_session, owner=repo_owner, repo_name=repo_name)
+
+        self.update_state(state= "PROGRESS", meta={"step" : "download"})
+        _, commit_sha = download_repo(http=http, owner=repo_owner, repo_name=repo_name)
+
+        self.update_state(state= "PROGRESS", meta={"step" : "chunking"})
+        chunks = chunk_repo_files(session=db_session, zip_file_path=repo_path, commit_sha=commit_sha, repo_id=repo.id, repo_name=repo_name)
+        db_session.commit()
+        
+        return {
+            "status": "ok",
+            "repo_id": repo.id,
+            "owner": repo_owner,
+            "name": repo_name,
+            "commit_sha": commit_sha,
+            "chunks_created": len(chunks) if chunks is not None else 0,
+        }
+    except Exception:
+        db_session.rollback()
+        raise
+    finally:
+        db_session.close()
+        http.close()
 
