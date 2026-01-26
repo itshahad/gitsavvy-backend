@@ -10,11 +10,11 @@ WORKDIR /usr/src/app/
 
 # install dependencies
 RUN pip install --upgrade pip
-COPY ./requirements.txt /usr/src/app/requirements.txt
+COPY ./src/requirements.txt /usr/src/app/requirements.txt
 RUN pip install  --no-cache-dir -r requirements.txt
 
 # Copy the app code
 COPY . /usr/src/app/
 
 # Run the worker with solo pool for GPU tasks
-CMD ["celery", "-A", "worker.worker", "worker", "-E", "--loglevel=info", "--pool=solo", "-Q", "queue1"]
+CMD ["celery", "-A", "src.worker:worker", "worker", "-E", "--loglevel=info", "--pool=solo", "-Q", "queue1"]

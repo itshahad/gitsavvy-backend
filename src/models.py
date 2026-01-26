@@ -1,11 +1,6 @@
-#MODELS IMPORT FOR TABLE CREATION:
-from features.indexer.models import *
-
-
-#======================================================================================
 from sqlalchemy import Column, Integer, DateTime
 from sqlalchemy.sql import func
-from database import Base
+from src.database import Base
 
 class BaseModel(Base):
     __abstract__ = True

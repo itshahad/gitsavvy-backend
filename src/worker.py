@@ -1,6 +1,6 @@
 from celery import Celery
-from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_INCLUDE_TASKS
 from kombu import Queue
+from src.config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_INCLUDE_TASKS
 
 
 def make_celery(include_task: bool):
@@ -27,7 +27,7 @@ def make_celery(include_task: bool):
     
     if(include_task):
         worker.autodiscover_tasks([
-            "features.indexer",
+            "src.features.indexer",
         ])
     
     return worker

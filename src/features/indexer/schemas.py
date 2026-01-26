@@ -4,6 +4,8 @@ import re
 from .models import ChunkType
 from .utils import validate_sha
 
+#====================================================================
+
 class RepositoryTopicModel(BaseModel):
     pass
 
@@ -14,6 +16,8 @@ class TopicRead(RepositoryTopicModel):
     id: int
     repository_id: int
     topic: str
+
+#====================================================================
 
 class RepositoryMetadataModel(BaseModel):
     owner: str = Field(validation_alias=AliasPath("owner", "login"))
@@ -40,7 +44,6 @@ class RepoRead(RepositoryMetadataModel):
     topics: list[TopicRead] = []
 
 #====================================================================
-
 
 class RepoFileModel(BaseModel):
     repository_id : int

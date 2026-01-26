@@ -1,8 +1,8 @@
 import os
-from pathlib import Path
-from .constants import *
-from zipfile import ZipFile, ZipInfo
 import hashlib
+from zipfile import ZipFile, ZipInfo
+from pathlib import Path
+from src.features.indexer.constants import *
 
 
 def get_repo_path(repo_name:str):

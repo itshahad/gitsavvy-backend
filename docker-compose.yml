@@ -15,12 +15,13 @@ services:
 
   api:
     build:
-      context: ./src
-      dockerfile: ../docker/api.Dockerfile
+      context: .
+      dockerfile: docker/api.Dockerfile
     container_name: gitsavvy_fastapi
     volumes:
-      - ./src:/usr/src/app
+      - .:/usr/src/app
     environment:
+      PYTHONPATH: /usr/src/app
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: db
@@ -39,13 +40,13 @@ services:
         - "6379:6379"
   flower:
     build:
-      context: ./src
-      dockerfile: ../docker/flower.Dockerfile
-    command: celery -A worker.worker flower --port=5555
+      context: .
+      dockerfile: docker/flower.Dockerfile
+    command: celery -A src.worker.worker flower --port=5555
     ports:
       - "5555:5555"
     environment:
-      PYTHONPATH: /usr/src/app/
+      PYTHONPATH: /usr/src/app
       CELERY_INCLUDE_TASKS: "0"
       BROKER_URL: ${CELERY_BROKER_URL}
       RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
@@ -54,13 +55,13 @@ services:
 
   gpu_worker:
     build:
-      context: ./src
-      dockerfile: ../docker/gpu-worker.Dockerfile
+      context: .
+      dockerfile: docker/gpu-worker.Dockerfile
     container_name: gpu-worker
     volumes:
-      - ./src:/usr/src/app
+      - .:/usr/src/app
     environment:
-      PYTHONPATH: /usr/src/app/
+      PYTHONPATH: /usr/src/app
     env_file:
       - .env
     deploy:

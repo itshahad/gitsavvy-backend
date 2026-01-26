@@ -3,14 +3,15 @@ from requests import HTTPError
 from pathlib import Path
 from zipfile import ZipFile
 from tree_sitter_language_pack import get_parser
-from .constants import *
-from .config import *
-from .utils import *
-from .schemas import *
-from .models import *
-from .exceptions import *
+from src.features.indexer.constants import *
+from src.features.indexer.config import *
+from src.features.indexer.utils import *
+from src.features.indexer.schemas import *
+from src.features.indexer.models import *
+from src.features.indexer.exceptions import *
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from src.exceptions import ExternalServiceTimeout
 
 
 #==================================================================================================
@@ -20,7 +21,7 @@ def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session:
         r = http.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers())
         r.raise_for_status()
         repo_metadata = RepoCreate.model_validate(r.json())
-        repo_data = Repository(**repo_metadata.model_dump(exclude={"topics", "url", "avatar_url", "language"}), url=str(repo_metadata.url), avatar_url= str(repo_metadata.avatar_url))
+        repo_data = Repository(**repo_metadata.model_dump(exclude={"topics", "url", "avatar_url", "language"}), url=str(repo_metadata.url), avatar_url= str(repo_metadata.avatar_url) if repo_metadata.avatar_url else None)
         session.add(repo_data)
         session.flush() #to get an id
         session.add_all([
@@ -30,6 +31,8 @@ def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session:
         session.commit()
         session.refresh(repo_data)
         return RepoRead.model_validate(repo_data)
+    except requests.exceptions.Timeout:
+        raise Exter
     except HTTPError as e:
         if r.status_code == 404:
             raise RepoNotFoundError(owner, repo_name)

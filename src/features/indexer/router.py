@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
-from .exceptions import RepoNotFoundError
-from features.indexer.tasks import indexer as indexer_task
+from src.database import get_db
+from src.features.indexer.exceptions import RepoNotFoundError
+from src.features.indexer.tasks import indexer as indexer_task
 
 
 router = APIRouter()
@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/")
 def test(session: Session = Depends(get_db)):
     try:
-        indexer_task.delay("django", "django")
+        indexer_task.delay("usestrix", "strix")
         return {
             "yay": "yay"
         }

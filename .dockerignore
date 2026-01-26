@@ -1,0 +1,95 @@
+# =========================
+# Python bytecode & caches
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# =========================
+# Environment & secrets
+# =========================
+.env
+.env.*
+*.env
+secrets/
+*.key
+*.pem
+
+# =========================
+# Git & version control
+# =========================
+.git/
+.gitignore
+.gitattributes
+
+# =========================
+# Docker files themselves
+# =========================
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# =========================
+# IDE / Editor configs
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
+
+# =========================
+# Test / coverage artifacts
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# =========================
+# Build / packaging artifacts
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# Jupyter / notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# OS junk files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# ML / data (optional)
+# =========================
+data/
+datasets/
+models/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+
+# =========================
+# Logs & runtime files
+# =========================
+logs/
+*.log
+*.pid

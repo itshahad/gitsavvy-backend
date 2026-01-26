@@ -1,9 +1,10 @@
-from worker import worker
 from sqlalchemy.orm import Session
-from database import SessionLocal
 import requests
-from .service import *
 from pathlib import Path
+from src.worker import worker
+from src.database import SessionLocal
+from src.features.indexer.service import *
+from src.features.indexer.utils import get_repo_path
 
 
 @worker.task(bind = True)
