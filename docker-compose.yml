@@ -61,6 +61,7 @@ services:
     container_name: gpu-worker
     volumes:
       - ./src:/usr/src/app/src
+      - ./.hf:/usr/src/app/.hf
     working_dir: /usr/src/app
     environment:
       PYTHONPATH: /usr/src/app

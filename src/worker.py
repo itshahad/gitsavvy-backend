@@ -2,7 +2,6 @@ from celery import Celery
 from kombu import Queue
 from src.config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_INCLUDE_TASKS
 
-
 def make_celery(include_task: bool):
     worker = Celery(__name__)
 
@@ -34,5 +33,10 @@ def make_celery(include_task: bool):
 
 worker = make_celery(CELERY_INCLUDE_TASKS == "1")
 
+if CELERY_INCLUDE_TASKS == "1":
+    import torch, torchvision
 
+    print("torch:", torch.__version__)
+    print("torchvision:", torchvision.__version__)
+    print("CUDA available:", torch.cuda.is_available())
 #for now we gonna work on solo pool (no concurrency), then we increase the throughput and scale processing 

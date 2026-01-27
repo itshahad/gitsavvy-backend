@@ -7,11 +7,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app/
-
+    
 # install dependencies
 RUN pip install --upgrade pip
 COPY ./src/requirements.txt /usr/src/app/requirements.txt
+COPY ./src/requirements-gpu.txt /usr/src/app/requirements-gpu.txt
 RUN pip install  --no-cache-dir -r requirements.txt
+RUN pip install  --no-cache-dir -r requirements-gpu.txt --extra-index-url https://download.pytorch.org/whl/cu126
 
 # Copy the app code
 COPY . /usr/src/app/
