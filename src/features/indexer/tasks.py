@@ -5,12 +5,14 @@ from src.worker import worker
 from src.database import SessionLocal
 from src.features.indexer.service import *
 from src.features.indexer.utils import get_repo_path
+from src.features.indexer.embedder import get_embedder_model
 
 
 @worker.task(bind = True)
 def indexer(self, repo_owner:str, repo_name:str):
     db_session = SessionLocal()
     http = requests.session()
+    embedder = get_embedder_model()
 
     try:
         repo_path = get_repo_path(repo_name=repo_name)
@@ -23,6 +25,9 @@ def indexer(self, repo_owner:str, repo_name:str):
 
         self.update_state(state= "PROGRESS", meta={"step" : "chunking"})
         chunks = chunk_repo_files(session=db_session, zip_file_path=repo_path, commit_sha=commit_sha, repo_id=repo.id, repo_name=repo_name)
+
+        embeddings = embed_chunks(embedder=embedder, chunks=chunks, session=db_session)
+
         db_session.commit()
         
         return {
@@ -31,7 +36,7 @@ def indexer(self, repo_owner:str, repo_name:str):
             "owner": repo_owner,
             "name": repo_name,
             "commit_sha": commit_sha,
-            "chunks_created": len(chunks) if chunks is not None else 0,
+            "chunks_created": len(embeddings) if embeddings is not None else 0,
         }
     except Exception:
         db_session.rollback()

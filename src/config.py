@@ -14,7 +14,7 @@ CELERY_BROKER_URL = os.getenv(
 CELERY_RESULT_BACKEND = os.getenv(
         "CELERY_RESULT_BACKEND", "redis://localhost:6379")
 CELERY_INCLUDE_TASKS = os.getenv(
-        "CELERY_INCLUDE_TASKS", "1")
+        "CELERY_INCLUDE_TASKS", "0")
 #Embedding Model ==========================================================================
 EMBEDDING_MODEL_NAME=os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-code-v1")
 HF_HOME=os.getenv("HF_HOME", "/usr/src/app/.hf")

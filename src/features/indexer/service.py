@@ -14,6 +14,7 @@ from sqlalchemy import select
 from src.exceptions import ExternalServiceTimeout
 
 
+
 #==================================================================================================
 #Github:
 def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session: Session):
@@ -31,8 +32,8 @@ def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session:
         session.commit()
         session.refresh(repo_data)
         return RepoRead.model_validate(repo_data)
-    except requests.exceptions.Timeout:
-        raise Exter
+    # except requests.exceptions.Timeout:
+    #     raise ExternalServiceTimeout()
     except HTTPError as e:
         if r.status_code == 404:
             raise RepoNotFoundError(owner, repo_name)
@@ -255,9 +256,38 @@ def chunk_repo_files( session, zip_file_path:str, repo_id:int, commit_sha:str, r
 
         if e in AST_LANG_EXT:
             print(f"AST_LANG_EXT -> {file.file_path}")
-            chunks.append(chunk_code_files(file, repo_name, session))
+            chunks.extend(chunk_code_files(file, repo_name, session))
         elif e in TEXT_LANG_EXT:
             print(f"TEXT_LANG_EXT -> {file.file_path}")
-            chunks.append(chunk_text_files(session, file, repo_name))
+            chunks.extend(chunk_text_files(session, file, repo_name))
     session.commit()      
     return chunks
+
+#==================================================================================================
+#embedding:
+def store_embedding(session:Session, data: dict):
+    embedding_data= ChunkEmbeddingCreate.model_validate(data)
+    embedding_db = ChunkEmbedding(**embedding_data.model_dump())
+    session.add(embedding_db)
+    session.flush()
+    return embedding_db
+
+
+def embed_chunks(embedder, session : Session, chunks : list[ChunkRead]):
+    text_chunks = [dict_to_text(chunk.model_dump()) for chunk in chunks]
+    emb = embedder.encode(
+        text_chunks,
+        batch_size=8,
+        show_progress_bar=True,
+        normalize_embeddings=True
+    )
+
+    embeddings = []
+    for chunk, vector in zip(chunks, emb):
+        data = {
+            "chunk_id": chunk.id,
+            "embedding_vector": vector
+        }
+        embedding = store_embedding(session, data)
+        embeddings.append(ChunkEmbeddingRead.model_validate(embedding))
+    return embeddings

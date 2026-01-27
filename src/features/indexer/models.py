@@ -3,6 +3,8 @@ from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON
 from typing import List
 from enum import Enum
 from src.models import BaseModel
+from pgvector.sqlalchemy import Vector
+
 
 class ChunkType(Enum):
     FUNCTION = "function"
@@ -71,9 +73,25 @@ class Chunk(BaseModel):
     embedding_vector: Mapped[List[int]] = mapped_column(JSON, nullable=True)
     content_hash: Mapped[str] = mapped_column(nullable=True)
 
+    embedding: Mapped["ChunkEmbedding"] = relationship(back_populates="chunk", cascade="all, delete-orphan", uselist=False)
+
     def __repr__(self):
         return f"Chunk(id={self.id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_line={self.start_line!r}, end_line={self.end_line!r}, type={self.type!r}, content={self.content!r}, embedding_vector={self.embedding_vector!r}, content_hash={self.content_hash!r})"
 
+#--------------------------------------------------------------
+
+class ChunkEmbedding(BaseModel):
+    __tablename__="chunk_embedding"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    embedding_vector: Mapped[list[float]] = mapped_column(Vector(1536))
+
+    chunk_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), unique=True)
+    chunk: Mapped["Chunk"] = relationship(back_populates="embedding")
+
+    def __repr__(self):
+        return f"ChunkEmbedding(id={self.id!r}, chunk_id={self.chunk_id!r}, embedding_vector={self.embedding_vector!r})"
+    
 #--------------------------------------------------------------
 
 class RepositoryTopic(BaseModel):

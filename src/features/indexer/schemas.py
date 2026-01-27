@@ -87,3 +87,16 @@ class ChunkRead(ChunkModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+
+#====================================================================
+
+class ChunkEmbeddingModel(BaseModel):
+    chunk_id : int
+    embedding_vector: list[float]
+
+class ChunkEmbeddingCreate(ChunkEmbeddingModel):
+    pass
+
+class ChunkEmbeddingRead(ChunkEmbeddingModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int

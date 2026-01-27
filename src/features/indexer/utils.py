@@ -110,3 +110,6 @@ def validate_sha(v: str) -> str:
     if not SHA1_RE.match(v):
         raise ValueError("SHA1 must be a 40-char hex")
     return v
+
+def dict_to_text(d: dict) -> str:
+    return "\n".join(f"{k}: {v}" for k , v in d.items())
