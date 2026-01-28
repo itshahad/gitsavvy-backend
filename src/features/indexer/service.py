@@ -1,7 +1,7 @@
 import requests
 from requests import HTTPError
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile, LargeZipFile
 from tree_sitter_language_pack import get_parser
 from src.features.indexer.constants import *
 from src.features.indexer.config import *
@@ -11,7 +11,8 @@ from src.features.indexer.models import *
 from src.features.indexer.exceptions import *
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from src.exceptions import ExternalServiceTimeout
+from src.exceptions import ExternalServiceError, UpstreamHTTPException, StorageError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 
 
@@ -29,28 +30,31 @@ def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session:
             RepositoryTopic(repository_id=repo_data.id, topic=t)
             for t in repo_metadata.topics
         ])
-        session.commit()
+        # session.commit()
         session.refresh(repo_data)
         return RepoRead.model_validate(repo_data)
-    # except requests.exceptions.Timeout:
-    #     raise ExternalServiceTimeout()
-    except HTTPError as e:
-        if r.status_code == 404:
-            raise RepoNotFoundError(owner, repo_name)
+    except Exception as e:
+        raise_request_exception(e=e, owner=owner, repo_name=repo_name)
 
 def download_repo(http: requests.Session, owner, repo_name):
-    commits =  http.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits", headers=headers())
-    commits.raise_for_status()
-    latest_commit = commits.json()[0]["sha"]
+    try:
+        commits = http.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits", headers=headers())
+        commits.raise_for_status()
+        latest_commit = commits.json()[0]["sha"]
+    
+        file_path = get_repo_path(repo_name=repo_name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        r = http.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/zipball/{latest_commit}", headers=headers())
+        r.raise_for_status()
+        with open(file_path, mode="wb") as file:
+            file.write(r.content)
 
-    file_path = get_repo_path(repo_name=repo_name)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    r = http.get(f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/zipball/{latest_commit}", headers=headers())
-    r.raise_for_status()
-    with open(file_path, mode="wb") as file:
-        file.write(r.content)
-
-    return str(file_path), latest_commit
+        return str(file_path), latest_commit
+    except (PermissionError, FileNotFoundError, OSError) as e:
+        msg = str(e) or "Storage write failed"
+        raise StorageError(message=msg) from e
+    except Exception as e:
+        raise_request_exception(e=e, owner=owner, repo_name=repo_name)    
 
 #==================================================================================================
 #file selection:
@@ -63,66 +67,81 @@ def get_file_from_db( session: Session, data: dict) -> bool:
         return None
 
 def store_file_to_db( session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info :ZipInfo):
-    content_hash = hash_file_content(zip_file, info) 
-    data = {
-        "repository_id" : repo_id,
-        "commit_sha": commit_sha,
-        "file_path": info.filename,
-        "content_hash": content_hash
-    }
-    file_from_db = get_file_from_db(session, data)
-    if file_from_db is not None:
-        return file_from_db
-    else:
+    try:
+        content_hash = hash_file_content(zip_file, info) 
+        data = {
+            "repository_id" : repo_id,
+            "commit_sha": commit_sha,
+            "file_path": info.filename,
+            "content_hash": content_hash
+        }
         file_data = FileCreate.model_validate(data)
         file_db = File(**file_data.model_dump())
         session.add(file_db)
         session.flush()
-        return file_db
+        return FileRead.model_validate(file_db)
+    except IntegrityError as e:
+        session.rollback()
+        file_from_db = get_file_from_db(session, data)
+        if file_from_db is None:
+            raise 
+        return FileRead.model_validate(file_from_db)
 
 def select_repo_files( session: Session, repo_id: int, zip_file_path: str, repo_name, commit_sha: str, max_size:int=200_000): # 200KB per file
-    selected_files = []
-    extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
+    try:
+        selected_files = []
+        extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
 
-    with ZipFile(zip_file_path, "r") as zip:
-        for info in zip.infolist():
-            if info.is_dir() or info.file_size > max_size:
-                continue
+        with ZipFile(zip_file_path, "r") as zip:
+            for info in zip.infolist():
+                if info.is_dir() or info.file_size > max_size:
+                    continue
 
-            if not is_skipped(info.filename) and not is_binary(zip, info.filename) and is_selected(info.filename):
-                zip.extract(info.filename, extract_dir)
-                file = store_file_to_db(session, repo_id, commit_sha, zip, info)
-                selected_files.append(FileRead.model_validate(file))
-        session.commit()
-    return selected_files
+                if not is_skipped(info.filename) and not is_binary(zip, info.filename) and is_selected(info.filename):
+                    zip.extract(info.filename, extract_dir)
+                    file = store_file_to_db(session, repo_id, commit_sha, zip, info)
+                    selected_files.append(file)
+            # session.commit()
+        return selected_files
+    
+    except (BadZipFile, LargeZipFile) as e:
+        raise UpstreamHTTPException(detail="invalid zip archive", status_code=400) from e
+    
+    except (PermissionError, FileNotFoundError, OSError) as e:
+        msg = str(e) or "Storage read failed"
+        raise StorageError(message=msg) from e
 #==================================================================================================
 #files chunking:
 def chunk_text_files(session, file: FileRead, repo_name: str, chunk_size= 100, overlapping=20):
-    if (overlapping >= chunk_size):
-        raise ValueError("overlapping value must be less than chunk_size")
-    
-    chunks = []
-    file_path = get_file_complete_path(file.file_path, repo_name)
+    try:
+        if (overlapping >= chunk_size):
+            raise ValueError("overlapping value must be less than chunk_size")
+        
+        chunks = []
+        file_path = get_file_complete_path(file.file_path, repo_name)
 
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
-    
-    step = chunk_size - overlapping
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        
+        step = chunk_size - overlapping
 
-    for i in range(0, len(lines), step):
-        chunk = lines[i: i + chunk_size]
-        text = "\n".join(chunk).strip()
-        data = {
-            "file_id" : file.id,
-            "type": ChunkType.TEXT.value,
-            "start_line": i + 1,
-            "end_line": min(i + chunk_size, len(lines)),
-            "content": text,
-            "content_hash": hash_text(text)
-        }
-        db_chunk = store_chunk_in_db(session, data)
-        chunks.append(ChunkRead.model_validate(db_chunk))
-    return chunks
+        for i in range(0, len(lines), step):
+            chunk = lines[i: i + chunk_size]
+            text = "\n".join(chunk).strip()
+            data = {
+                "file_id" : file.id,
+                "type": ChunkType.TEXT.value,
+                "start_line": i + 1,
+                "end_line": min(i + chunk_size, len(lines)),
+                "content": text,
+                "content_hash": hash_text(text)
+            }
+            db_chunk = store_chunk_in_db(session, data)
+            chunks.append(ChunkRead.model_validate(db_chunk))
+        return chunks
+    except (PermissionError, FileNotFoundError, OSError) as e:
+        msg = str(e) or "Storage read failed"
+        raise StorageError(message=msg) from e
 #--------------------------------------------------------------------------------------------------
 #code files chunking:
 def build_class_summary(src: bytes, node):
@@ -139,12 +158,12 @@ def build_class_summary(src: bytes, node):
     if body:
         for child in body.children:
             if is_function(child):
-                methods.append(method_signature(src, child))
+                methods.append(node_signature(src, child))
                 continue
 
             wrapped_function = unwrap_function(child)
             if wrapped_function:
-                methods.append(method_signature(src, wrapped_function))
+                methods.append(node_signature(src, wrapped_function))
                 continue
 
             # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
@@ -165,7 +184,7 @@ def build_file_summary( src: bytes, root, file: FileRead, session: Session):
     classes_and_methods = []
     for child in root.children:
         if is_class(child) or is_function(child):
-            classes_and_methods.append(method_signature(src, child))
+            classes_and_methods.append(node_signature(src, child))
             continue
 
         text = node_text(src, child)
@@ -266,7 +285,7 @@ def chunk_repo_files( session, zip_file_path:str, repo_id:int, commit_sha:str, r
         elif e in TEXT_LANG_EXT:
             print(f"TEXT_LANG_EXT -> {file.file_path}")
             chunks.extend(chunk_text_files(session, file, repo_name))
-    session.commit()      
+    # session.commit()      
     return chunks
 
 #==================================================================================================

@@ -67,7 +67,7 @@ def node_text(src: bytes, node):
 def slice_text(src: bytes, a: int, b: int) -> str:
     return src[a:b].decode("utf-8", errors="replace")
 
-def method_signature(src: bytes, node):
+def node_signature(src: bytes, node):
     body = find_body(node)
     if body:
         return slice_text(src, node.start_byte, body.start_byte)

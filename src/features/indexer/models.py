@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON
+from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON, UniqueConstraint
 from typing import List
 from enum import Enum
 from src.models import BaseModel
@@ -37,6 +37,8 @@ class Repository(BaseModel):
 
 class File(BaseModel):
     __tablename__ = "file"
+
+    __table_args__ = (UniqueConstraint("repository_id", "commit_sha", "file_path", name="uq_file"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
