@@ -1,15 +1,15 @@
-from fastapi import HTTPException
-
-class UpstreamHTTPException(HTTPException):
-    def __init__(self, detail: str | None = None,  status_code: int | None = None):
-        msg = detail if detail is not None else "unknown upstream error"
-        super().__init__(status_code=status_code, detail= f"External Service Error(message: {msg})")
-
 class ExternalServiceError(Exception):
-    def __init__(self, service: str, message: str | None = None):
+    def __init__(self, service: str, message: str | None = None, status_code: int | None = None):
         self.service = service
         self.message = message
-        super().__init__(f"{service}: {message or 'external service error'}")
+        self.status_code = status_code
+
+        base = f"{self.service}:"
+        if self.status_code is not None:
+            base += f"({self.status_code})"
+        if self.message is not None:
+            base += f" {self.message}"
+        super().__init__(base)
 
 
 class StorageError(Exception):

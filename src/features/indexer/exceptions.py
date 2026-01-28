@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 import requests
 from requests.exceptions import HTTPError
-from src.exceptions import ExternalServiceError, UpstreamHTTPException
+from src.exceptions import ExternalServiceError, ExternalServiceError
 
 class RepoNotFoundError(Exception):
     def __init__(self, owner: str, repo: str):
@@ -13,10 +13,10 @@ def raise_request_exception(e:Exception, owner: str, repo_name: str):
         if status == 404:
             raise RepoNotFoundError(owner, repo_name) from e
         if status in (401, 403):
-            raise UpstreamHTTPException(detail="auth/forbidden", status_code=status) from e
+            raise ExternalServiceError(detail="auth/forbidden", status_code=status) from e
         if status == 429:
-            raise UpstreamHTTPException(detail="rate_limited", status_code=status) from e
-        raise UpstreamHTTPException(detail="http_error", status_code=status) from e
+            raise ExternalServiceError(detail="rate_limited", status_code=status) from e
+        raise ExternalServiceError(detail="http_error", status_code=status) from e
 
     if isinstance(e, requests.exceptions.RequestException):
         raise ExternalServiceError(service="GitHub",message=str(e)) from e

@@ -11,7 +11,7 @@ from src.features.indexer.models import *
 from src.features.indexer.exceptions import *
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from src.exceptions import ExternalServiceError, UpstreamHTTPException, StorageError
+from src.exceptions import ExternalServiceError, ExternalServiceError, StorageError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 
@@ -105,7 +105,7 @@ def select_repo_files( session: Session, repo_id: int, zip_file_path: str, repo_
         return selected_files
     
     except (BadZipFile, LargeZipFile) as e:
-        raise UpstreamHTTPException(detail="invalid zip archive", status_code=400) from e
+        raise ExternalServiceError(detail="invalid zip archive") from e
     
     except (PermissionError, FileNotFoundError, OSError) as e:
         msg = str(e) or "Storage read failed"
