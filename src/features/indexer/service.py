@@ -161,17 +161,23 @@ def build_class_summary(src: bytes, node):
 
 def build_file_summary( src: bytes, root, file: FileRead, session: Session):
     parts = []
+
+    classes_and_methods = []
     for child in root.children:
         if is_class(child) or is_function(child):
-            break
+            classes_and_methods.append(method_signature(src, child))
+            continue
 
         text = node_text(src, child)
         if not text:
             continue
         parts.append(text)
 
+    if classes_and_methods:
+        parts.append("\nClasses/Methods in file:\n" + "\n".join(f"- {item}" for item in classes_and_methods).strip())
+
     text = "\n".join(parts).strip()
-    print(file)
+    
     data = {
         "file_id" : file.id,
         "type": ChunkType.FILE_SUMMARY.value,
