@@ -113,3 +113,11 @@ def validate_sha(v: str) -> str:
 
 def dict_to_text(d: dict) -> str:
     return "\n".join(f"{k}: {v}" for k , v in d.items())
+
+
+def get_item_from_db(session, stmt) -> bool:
+    result = session.execute(stmt).first()
+    if result is not None:
+        return result[0]
+    else: 
+        return None

@@ -33,6 +33,13 @@ def get_repo_metadata(http: requests.Session, owner:str, repo_name:str, session:
         # session.commit()
         session.refresh(repo_data)
         return RepoRead.model_validate(repo_data)
+    except IntegrityError as e:
+        session.rollback()
+        stmt = select(Repository).where(Repository.owner == owner, Repository.name == repo_name)
+        repo_from_db = get_item_from_db(session, stmt)
+        if repo_from_db is None:
+            raise 
+        return RepoRead.model_validate(repo_from_db)
     except Exception as e:
         raise_request_exception(e=e, owner=owner, repo_name=repo_name)
 
@@ -58,14 +65,6 @@ def download_repo(http: requests.Session, owner, repo_name):
 
 #==================================================================================================
 #file selection:
-def get_file_from_db( session: Session, data: dict) -> bool:
-    stmt = select(File).where(File.repository_id == data["repository_id"], File.commit_sha == data["commit_sha"], File.file_path == data["file_path"])
-    result = session.execute(stmt).first()
-    if result is not None:
-        return result[0]
-    else: 
-        return None
-
 def store_file_to_db( session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info :ZipInfo):
     try:
         content_hash = hash_file_content(zip_file, info) 
@@ -82,7 +81,8 @@ def store_file_to_db( session: Session, repo_id: int, commit_sha: str, zip_file:
         return FileRead.model_validate(file_db)
     except IntegrityError as e:
         session.rollback()
-        file_from_db = get_file_from_db(session, data)
+        stmt = select(File).where(File.repository_id == data["repository_id"], File.commit_sha == data["commit_sha"], File.file_path == data["file_path"])
+        file_from_db = get_item_from_db(session, stmt)
         if file_from_db is None:
             raise 
         return FileRead.model_validate(file_from_db)

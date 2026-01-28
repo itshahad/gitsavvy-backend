@@ -17,6 +17,8 @@ class ChunkType(Enum):
 class Repository(BaseModel):
     __tablename__ = "repository"
 
+    __table_args__ = (UniqueConstraint("owner", "name", name="uq_repo"),)
+
     id: Mapped[int] = mapped_column(primary_key=True)
     owner: Mapped[str] = mapped_column(String(30))
     name: Mapped[str] = mapped_column(String(30))
