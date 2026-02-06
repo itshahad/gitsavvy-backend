@@ -5,91 +5,142 @@ from pathlib import Path
 from src.features.indexer.constants import *
 
 
-def get_repo_path(repo_name:str):
+def normalize_newlines(s: str) -> str:
+    return s.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def get_repo_path(repo_name: str) -> Path:
     return Path(f"{REPOS_PATH}/{repo_name}.zip")
 
-def get_file_complete_path(file_path:str, repo_name: str) -> str:
+
+def get_file_complete_path(file_path: str, repo_name: str) -> str:
     return f"{REPOS_PATH}/{repo_name}/{file_path}"
+
 
 def norm(p: str) -> str:
     return p.replace("\\", "/").lower()
 
+
 def ext(file_path: str) -> str:
     _, ext = os.path.splitext(file_path)
-    return ext
+    return ext.lower()
 
-def is_skipped(file_path:str) -> bool:
+
+def lang_from_ext(file_ext: str) -> str | None:
+    return EXT_TO_LANG.get(file_ext.lower())
+
+
+def is_skipped(file_path: str) -> bool:
     p = norm(file_path)
-    if any(marker in p for marker in SKIP_DIR_MARKERS) or ext(p) in SKIP_EXT or p.endswith("/"):
+    if p.endswith("/"):
+        return True
+    if any(marker in p for marker in SKIP_DIR_MARKERS):
+        return True
+    if ext(p) in SKIP_EXT:
         return True
     return False
 
-def is_selected(file_path:str) -> bool:
+
+def is_selected(file_path: str) -> bool:
     p = norm(file_path)
-    if any(marker in p for marker in IMPORTANT_PREFIXES) or ext(p) in CODE_EXT:
+
+    base = os.path.basename(p)
+    if base in IMPORTANT_FILES_EXACT:
         return True
+
+    if any(p.startswith(prefix) for prefix in IMPORTANT_PREFIXES):
+        return True
+
+    if ext(p) in CODE_EXT:
+        return True
+
     return False
+
 
 def find_body(node):
-    hints = ["body", "block", "members", "suite"]
-    for hint in hints:
+    for hint in ("body", "block", "members", "suite"):
         b = node.child_by_field_name(hint)
-        if b is not None: 
+        if b is not None:
             return b
+
+    for ch in node.named_children:
+        if ch.type in ("compound_statement", "block"):
+            return ch
+
     return None
 
-def is_function(node):
-    t = node.type    
-    if not any(h in t for h in FUNC_HINTS):
-        return False
+
+def is_block(node, *, lang: str | None = None) -> bool:
     return (
-        any(d in t for d in DECL_HINTS)
-        or t == "function_definition"
-        or t == "method_definition"
-        or t == "method_declaration"
-        or t == "constructor_declaration"
-        or t == "async_function_definition"
+        (node.type in BLOCK_TYPES)
+        or is_function(node, lang=lang)
+        or is_class(node, lang=lang)
     )
 
-def is_class(node):
-    t = node.type
-    if not any(h in t for h in CLASS_HINTS):
-        return False
-    return (
-        any(d in t for d in DECL_HINTS)
-        or t.endswith(SPEC_SUFFIX)
-        or t in ("class_definition", "class_declaration", "interface_declaration")
-    )
 
-def node_text(src: bytes, node):
-    return src[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+def is_function(node, *, lang: str | None = None) -> bool:
+    if not lang:
+        return False
+    return node.type in FUNCTION_NODE_TYPES.get(lang, set())
+
+
+def is_class(node, *, lang: str | None = None) -> bool:
+    if not lang:
+        return False
+    return node.type in CLASS_NODE_TYPES.get(lang, set())
+
+
+def node_text(src: bytes, node) -> str:
+    return src[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
+
+
+def node_line_count(node) -> int:
+    return node.end_point[0] - node.start_point[0] + 1
+
 
 def slice_text(src: bytes, a: int, b: int) -> str:
     return src[a:b].decode("utf-8", errors="replace")
 
+
 def node_signature(src: bytes, node):
     body = find_body(node)
     if body:
-        return slice_text(src, node.start_byte, body.start_byte)
+
+        end = body.start_byte
+        if src[end : end + 1] == b"{":
+            end += 1
+
+        return slice_text(src, node.start_byte, end)
     else:
         return node_text(src, node)
 
-def unwrap_function(wrapper):
-    for child in wrapper.children:
-        if is_function(child):
+
+def block_placeholder(src: bytes, node) -> str:
+    text = node_text(src, node)
+    first_line = (text.splitlines()[0].strip() if text else node.type)[:120]
+    start = node.start_point[0] + 1
+    end = node.end_point[0] + 1
+    return f"\n/* CHILD: {node.type} ({start} - {end}) {first_line} */\n"
+
+
+def unwrap_function(wrapper, *, lang: str | None = None):
+    for child in wrapper.named_children:
+        if is_function(child, lang=lang):
             return child
     return None
 
-def is_binary(zip_file: ZipFile, info :ZipInfo, sample_size: int=4096):
+
+def is_binary(zip_file: ZipFile, info: ZipInfo, sample_size: int = 4096):
     with zip_file.open(info) as f:
         data = f.read(sample_size)
-        
+
         for magic in BINARY_FILE_MAGICS:
             if data.startswith(magic):
-                return True   
+                return True
     return False
 
-def hash_file_content(zip_file: ZipFile, info :ZipInfo):
+
+def hash_file_content(zip_file: ZipFile, info: ZipInfo):
     BUF_SIZE = 65536
     content_hash = hashlib.sha1()
     with zip_file.open(info, "r") as f:
@@ -100,24 +151,27 @@ def hash_file_content(zip_file: ZipFile, info :ZipInfo):
             content_hash.update(data)
     return content_hash.hexdigest()
 
-def hash_text(text:str):
+
+def hash_text(text: str):
     normalized = text.replace("\r\n", "\n").strip()
     content_hash = hashlib.sha1()
     content_hash.update(normalized.encode("utf-8", errors="replace"))
     return content_hash.hexdigest()
+
 
 def validate_sha(v: str) -> str:
     if not SHA1_RE.match(v):
         raise ValueError("SHA1 must be a 40-char hex")
     return v
 
+
 def dict_to_text(d: dict) -> str:
-    return "\n".join(f"{k}: {v}" for k , v in d.items())
+    return "\n".join(f"{k}: {v}" for k, v in d.items())
 
 
 def get_item_from_db(session, stmt) -> bool:
     result = session.execute(stmt).first()
     if result is not None:
         return result[0]
-    else: 
+    else:
         return None

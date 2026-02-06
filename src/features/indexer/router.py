@@ -7,13 +7,11 @@ from src.features.indexer.tasks import indexer as indexer_task
 
 router = APIRouter()
 
+
 @router.get("/")
 def test(session: Session = Depends(get_db)):
     try:
-        indexer_task.delay("usestrix", "strix")
-        return {
-            "yay": "yay"
-        }
+        indexer_task.delay("Git-Savvy", "test")
+        return {"yay": "yay"}
     except RepoNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
