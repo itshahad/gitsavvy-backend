@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON, UniqueConstraint
+from sqlalchemy import String, ForeignKey, Enum as SqlEnum, UniqueConstraint
 from typing import List
 from enum import Enum
 from src.models import BaseModel
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector  # type: ignore
 
 
 class ChunkType(Enum):

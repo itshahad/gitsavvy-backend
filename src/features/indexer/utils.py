@@ -3,6 +3,12 @@ import hashlib
 from zipfile import ZipFile, ZipInfo
 from pathlib import Path
 from src.features.indexer.constants import *
+from tree_sitter import Node
+from sqlalchemy.orm import Session
+from typing import TypeVar
+from sqlalchemy.sql import Select
+
+T = TypeVar("T")
 
 
 def normalize_newlines(s: str) -> str:
@@ -26,7 +32,7 @@ def ext(file_path: str) -> str:
     return ext.lower()
 
 
-def lang_from_ext(file_ext: str) -> str | None:
+def lang_from_ext(file_ext: str):
     return EXT_TO_LANG.get(file_ext.lower())
 
 
@@ -57,7 +63,7 @@ def is_selected(file_path: str) -> bool:
     return False
 
 
-def find_body(node):
+def find_body(node: Node) -> Node | None:
     for hint in ("body", "block", "members", "suite"):
         b = node.child_by_field_name(hint)
         if b is not None:
@@ -70,7 +76,7 @@ def find_body(node):
     return None
 
 
-def is_block(node, *, lang: str | None = None) -> bool:
+def is_block(node: Node, lang: str | None = None) -> bool:
     return (
         (node.type in BLOCK_TYPES)
         or is_function(node, lang=lang)
@@ -78,23 +84,23 @@ def is_block(node, *, lang: str | None = None) -> bool:
     )
 
 
-def is_function(node, *, lang: str | None = None) -> bool:
+def is_function(node: Node, lang: str | None = None) -> bool:
     if not lang:
         return False
     return node.type in FUNCTION_NODE_TYPES.get(lang, set())
 
 
-def is_class(node, *, lang: str | None = None) -> bool:
+def is_class(node: Node, *, lang: str | None = None) -> bool:
     if not lang:
         return False
     return node.type in CLASS_NODE_TYPES.get(lang, set())
 
 
-def node_text(src: bytes, node) -> str:
+def node_text(src: bytes, node: Node) -> str:
     return src[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
-def node_line_count(node) -> int:
+def node_line_count(node: Node) -> int:
     return node.end_point[0] - node.start_point[0] + 1
 
 
@@ -102,7 +108,7 @@ def slice_text(src: bytes, a: int, b: int) -> str:
     return src[a:b].decode("utf-8", errors="replace")
 
 
-def node_signature(src: bytes, node):
+def node_signature(src: bytes, node: Node):
     body = find_body(node)
     if body:
 
@@ -115,7 +121,7 @@ def node_signature(src: bytes, node):
         return node_text(src, node)
 
 
-def block_placeholder(src: bytes, node) -> str:
+def block_placeholder(src: bytes, node: Node) -> str:
     text = node_text(src, node)
     first_line = (text.splitlines()[0].strip() if text else node.type)[:120]
     start = node.start_point[0] + 1
@@ -123,7 +129,7 @@ def block_placeholder(src: bytes, node) -> str:
     return f"\n/* CHILD: {node.type} ({start} - {end}) {first_line} */\n"
 
 
-def unwrap_function(wrapper, *, lang: str | None = None):
+def unwrap_function(wrapper: Node, lang: str | None = None):
     for child in wrapper.named_children:
         if is_function(child, lang=lang):
             return child
@@ -165,13 +171,10 @@ def validate_sha(v: str) -> str:
     return v
 
 
-def dict_to_text(d: dict) -> str:
+def dict_to_text(d: dict[str, str]) -> str:
     return "\n".join(f"{k}: {v}" for k, v in d.items())
 
 
-def get_item_from_db(session, stmt) -> bool:
+def get_item_from_db(session: Session, stmt: Select[tuple[T]]) -> T | None:
     result = session.execute(stmt).first()
-    if result is not None:
-        return result[0]
-    else:
-        return None
+    return result[0] if result else None

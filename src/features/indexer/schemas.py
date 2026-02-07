@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
 from pydantic.aliases import AliasPath
-import re
 from .models import ChunkType
 from .utils import validate_sha
 

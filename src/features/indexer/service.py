@@ -1,5 +1,4 @@
 import requests
-from requests import HTTPError
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile
 from tree_sitter_language_pack import get_parser
@@ -11,9 +10,10 @@ from src.features.indexer.models import *
 from src.features.indexer.exceptions import *
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from src.exceptions import ExternalServiceError, ExternalServiceError, StorageError
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from src.exceptions import ExternalServiceError, StorageError
+from sqlalchemy.exc import IntegrityError
 from src.config import MAX_LINES_NUM, MAX_FUNC_SPLITTING_DEPTH, OVERLAPPING_LINES_NUM
+from pgvector.sqlalchemy import Vector  # type: ignore
 
 
 # ==================================================================================================
@@ -58,7 +58,7 @@ def get_repo_metadata(
         raise_request_exception(e=e, owner=owner, repo_name=repo_name)
 
 
-def download_repo(http: requests.Session, owner, repo_name):
+def download_repo(http: requests.Session, owner: str, repo_name: str):
     try:
         commits = http.get(
             f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits", headers=headers()
@@ -89,20 +89,20 @@ def download_repo(http: requests.Session, owner, repo_name):
 def store_file_to_db(
     session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info: ZipInfo
 ):
+    content_hash = hash_file_content(zip_file, info)
+    data: dict[str, str | int] = {
+        "repository_id": repo_id,
+        "commit_sha": commit_sha,
+        "file_path": info.filename,
+        "content_hash": content_hash,
+    }
     try:
-        content_hash = hash_file_content(zip_file, info)
-        data = {
-            "repository_id": repo_id,
-            "commit_sha": commit_sha,
-            "file_path": info.filename,
-            "content_hash": content_hash,
-        }
         file_data = FileCreate.model_validate(data)
         file_db = File(**file_data.model_dump())
         session.add(file_db)
         session.flush()
         return FileRead.model_validate(file_db)
-    except IntegrityError as e:
+    except IntegrityError:
         session.rollback()
         stmt = select(File).where(
             File.repository_id == data["repository_id"],
@@ -119,12 +119,12 @@ def select_repo_files(
     session: Session,
     repo_id: int,
     zip_file_path: str,
-    repo_name,
+    repo_name: str,
     commit_sha: str,
     max_size: int = 200_000,
 ):  # 200KB per file
     try:
-        selected_files = []
+        selected_files: list[FileRead] = []
         extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
 
         with ZipFile(zip_file_path, "r") as zip:
@@ -134,7 +134,7 @@ def select_repo_files(
 
                 if (
                     not is_skipped(info.filename)
-                    and not is_binary(zip, info.filename)
+                    and not is_binary(zip, info)
                     and is_selected(info.filename)
                 ):
                     zip.extract(info.filename, extract_dir)
@@ -144,7 +144,7 @@ def select_repo_files(
         return selected_files
 
     except (BadZipFile, LargeZipFile) as e:
-        raise ExternalServiceError(detail="invalid zip archive") from e
+        raise ExternalServiceError(service="ZIP", message="invalid zip archive") from e
 
     except (PermissionError, FileNotFoundError, OSError) as e:
         msg = str(e) or "Storage read failed"
@@ -154,18 +154,18 @@ def select_repo_files(
 # ==================================================================================================
 # files chunking:
 def chunk_text_files(
-    session,
+    session: Session,
     repo_id: int,
     file: FileRead,
     repo_name: str,
-    chunk_size=MAX_LINES_NUM,
-    overlapping=OVERLAPPING_LINES_NUM,
+    chunk_size: int = MAX_LINES_NUM,
+    overlapping: int = OVERLAPPING_LINES_NUM,
 ):
     try:
         if overlapping >= chunk_size:
             raise ValueError("overlapping value must be less than chunk_size")
 
-        chunks = []
+        chunks: list[ChunkRead] = []
         file_path = get_file_complete_path(file.file_path, repo_name)
 
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -196,8 +196,8 @@ def chunk_text_files(
 
 # --------------------------------------------------------------------------------------------------
 # code files chunking:
-def build_class_summary(src: bytes, node, repo_id, lang):
-    parts = []
+def build_class_summary(src: bytes, node: Node, repo_id: int, lang: str | None):
+    parts: list[str] = []
 
     body = find_body(node)
 
@@ -208,8 +208,8 @@ def build_class_summary(src: bytes, node, repo_id, lang):
     )
     parts.append(header.strip())
 
-    simple_contents = []
-    methods = []
+    simple_contents: list[str] = []
+    methods: list[str] = []
 
     if body:
         for child in body.children:
@@ -238,11 +238,11 @@ def build_class_summary(src: bytes, node, repo_id, lang):
 
 
 def build_file_summary(
-    src: bytes, root, repo_id: int, file: FileRead, session: Session, lang: str
+    src: bytes, root: Node, repo_id: int, file: FileRead, session: Session, lang: str
 ):
-    parts = []
+    parts: list[str] = []
 
-    classes_and_methods = []
+    classes_and_methods: list[str] = []
     for child in root.children:
         if is_class(child, lang=lang) or is_function(child, lang=lang):
             classes_and_methods.append(node_signature(src, child))
@@ -275,13 +275,13 @@ def build_file_summary(
 
 
 def visit_node(
-    node,
+    node: Node,
     repo_id: int,
     src: bytes,
-    chunks_list: list,
+    chunks_list: list[ChunkRead],
     file: FileRead,
     session: Session,
-    lang: str,
+    lang: str | None,
     chunk_parent_id: int | None = None,
 ):
     is_fn = is_function(node, lang=lang)
@@ -338,8 +338,8 @@ def visit_node(
 # what im trying to do:
 # I check the length of the function, if long then go into children, chunk them, check the children length, if long chunk them too
 # I'm trying to keep order of statements in account
-def collect_blocks(node, max_lines=MAX_LINES_NUM):
-    blocks = []
+def collect_blocks(node: Node, max_lines: int = MAX_LINES_NUM):
+    blocks: list[Node] = []
 
     body = find_body(node)
     if not body:
@@ -351,14 +351,14 @@ def collect_blocks(node, max_lines=MAX_LINES_NUM):
     return blocks
 
 
-def build_parent_with_placeholders(src: bytes, node, extracted_nodes):
+def build_parent_with_placeholders(src: bytes, node: Node, extracted_nodes: list[Node]):
     body = find_body(node)
     if not body:
         return node_text(src, node)
 
     blocks = sorted(extracted_nodes, key=lambda n: n.start_byte)
 
-    out = []
+    out: list[str] = []
 
     cursor = body.start_byte
     if src[cursor : cursor + 1] == b"{":
@@ -376,9 +376,17 @@ def build_parent_with_placeholders(src: bytes, node, extracted_nodes):
 
 
 def func_children_chunks(
-    session, repo_id: int, src, child_node, parent_id, file, depth, max_depth, max_lines
+    session: Session,
+    repo_id: int,
+    src: bytes,
+    child_node: Node,
+    parent_id: int,
+    file: FileRead,
+    depth: int,
+    max_depth: int,
+    max_lines: int,
 ):
-    blocks_data = []
+    blocks_data: list[Chunk] = []
 
     if depth + 1 <= max_depth:
         inner_blocks = collect_blocks(node=child_node, max_lines=max_lines)
@@ -439,17 +447,17 @@ def func_children_chunks(
 
 
 def split_large_func_in_chunks(
-    session,
+    session: Session,
     repo_id: int,
     src: bytes,
-    node,
-    file,
-    depth=0,
-    max_depth=MAX_FUNC_SPLITTING_DEPTH,
-    max_lines=MAX_LINES_NUM,
+    node: Node,
+    file: FileRead,
+    depth: int = 0,
+    max_depth: int = MAX_FUNC_SPLITTING_DEPTH,
+    max_lines: int = MAX_LINES_NUM,
     chunk_parent_id: int | None = None,
 ):
-    blocks_data = []
+    blocks_data: list[Chunk] = []
     body = find_body(node)
     if not body:
         return node_text(src, node)
@@ -495,11 +503,17 @@ def split_large_func_in_chunks(
     return blocks_data
 
 
-def chunk_code_files(file: FileRead, repo_id: int, repo_name: str, session: Session):
-    chunks = []
+def chunk_code_files(
+    file: FileRead, repo_id: int, repo_name: str, session: Session
+) -> list[ChunkRead]:
+    chunks: list[ChunkRead] = []
     file_path = get_file_complete_path(file.file_path, repo_name)
     file_ext = ext(file_path)
     lang = lang_from_ext(file_ext)
+
+    if lang is None:
+        return []
+
     file_bytes = Path(file_path).read_bytes()
     parser = get_parser(language_name=lang)
 
@@ -528,7 +542,7 @@ def store_chunk_in_db(
     repo_id: int,
     file_id: int,
     file_path: str,
-    type: ChunkType,
+    type: str,
     content: str,
     content_hash: str,
     start_line: int | None = None,
@@ -536,7 +550,7 @@ def store_chunk_in_db(
     chunk_parent_id: int | None = None,
 ):
     print(repo_id)
-    data = {
+    data: dict[str, int | str] = {
         "repo_id": repo_id,
         "file_id": file_id,
         "file_path": file_path,
@@ -560,9 +574,9 @@ def store_chunk_in_db(
 
 
 def chunk_repo_files(
-    session, zip_file_path: str, repo_id: int, commit_sha: str, repo_name: str
+    session: Session, zip_file_path: str, repo_id: int, commit_sha: str, repo_name: str
 ):
-    chunks = []
+    chunks: list[ChunkRead] = []
     selected_files = select_repo_files(
         session, repo_id, zip_file_path, repo_name, commit_sha
     )
@@ -582,23 +596,25 @@ def chunk_repo_files(
 
 # ==================================================================================================
 # embedding:
-def store_embedding(session: Session, data: dict):
-    embedding_data = ChunkEmbeddingCreate.model_validate(data)
+def store_embedding(session: Session, chunk_id: int, embedding_vector: Vector):
+    embedding_data = ChunkEmbeddingCreate.model_validate(
+        {"chunk_id": chunk_id, "embedding_vector": embedding_vector}
+    )
     embedding_db = ChunkEmbedding(**embedding_data.model_dump())
     session.add(embedding_db)
     session.flush()
     return embedding_db
 
 
-def embed_chunks(embedder, session: Session, chunks: list[ChunkRead]):
-    text_chunks = [dict_to_text(chunk.model_dump()) for chunk in chunks]
-    emb = embedder.encode(
-        text_chunks, batch_size=8, show_progress_bar=True, normalize_embeddings=True
-    )
+# def embed_chunks(embedder, session: Session, chunks: list[ChunkRead]):
+#     text_chunks = [dict_to_text(chunk.model_dump()) for chunk in chunks]
+#     emb = embedder.encode(
+#         text_chunks, batch_size=8, show_progress_bar=True, normalize_embeddings=True
+#     )
 
-    embeddings = []
-    for chunk, vector in zip(chunks, emb):
-        data = {"chunk_id": chunk.id, "embedding_vector": vector}
-        embedding = store_embedding(session, data)
-        embeddings.append(ChunkEmbeddingRead.model_validate(embedding))
-    return embeddings
+#     embeddings = []
+#     for chunk, vector in zip(chunks, emb):
+#         data = {"chunk_id": chunk.id, "embedding_vector": vector}
+#         embedding = store_embedding(session, chunk_id: int, )
+#         embeddings.append(ChunkEmbeddingRead.model_validate(embedding))
+#     return embeddings

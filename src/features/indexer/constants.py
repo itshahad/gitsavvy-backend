@@ -1,4 +1,5 @@
 import re
+from tree_sitter_language_pack import SupportedLanguage
 
 REPOS_PATH = "repos"
 
@@ -111,7 +112,6 @@ CODE_EXT = {
     ".css",
     ".scss",
     ".sh",
-    ".bat",
 }
 
 AST_LANG_EXT = {
@@ -148,7 +148,6 @@ TEXT_LANG_EXT = {
     ".css",
     ".scss",
     ".sh",
-    ".bat",
 }
 
 BLOCK_TYPES = {
@@ -203,7 +202,8 @@ BINARY_FILE_MAGICS = {
     b"SQLite format 3\x00",
 }
 
-EXT_TO_LANG = {
+
+EXT_TO_LANG: dict[str, SupportedLanguage] = {
     ".py": "python",
     ".js": "javascript",
     ".jsx": "javascript",
@@ -221,7 +221,6 @@ EXT_TO_LANG = {
     ".rb": "ruby",
     ".swift": "swift",
     ".sh": "bash",
-    ".bat": "batch",
 }
 
 FUNCTION_NODE_TYPES = {
@@ -266,7 +265,7 @@ FUNCTION_NODE_TYPES = {
     },
 }
 
-CLASS_NODE_TYPES = {
+CLASS_NODE_TYPES: dict[str, set[str]] = {
     "python": {"class_definition"},
     "javascript": {"class_declaration"},
     "typescript": {"class_declaration"},

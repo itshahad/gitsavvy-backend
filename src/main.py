@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from src.database import engine, Base
 
 # must imported:
-from src.worker import worker
+from src.worker import worker  # type: ignore
 from src.models_loader import *
 
 # routers:
