@@ -82,55 +82,20 @@ IMPORTANT_PREFIXES = (
     "packages/",
 )
 
-CODE_EXT = {
-    ".py",
-    ".js",
-    ".ts",
-    ".tsx",
-    ".jsx",
-    ".java",
-    ".kt",
-    ".go",
-    ".rs",
-    ".c",
-    ".cpp",
-    ".h",
-    ".cs",
-    ".php",
-    ".rb",
-    ".swift",
-    ".md",
-    ".rst",
-    ".txt",
-    ".yml",
-    ".yaml",
-    ".json",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".html",
-    ".css",
-    ".scss",
-    ".sh",
-}
 
 AST_LANG_EXT = {
     ".py",
     ".js",
+    ".jsx",
     ".ts",
     ".tsx",
-    ".jsx",
     ".java",
     ".kt",
     ".go",
-    ".rs",
     ".c",
     ".cpp",
-    ".h",
-    ".dart",
     ".cs",
     ".php",
-    ".rb",
     ".swift",
 }
 
@@ -212,37 +177,32 @@ EXT_TO_LANG: dict[str, SupportedLanguage] = {
     ".java": "java",
     ".kt": "kotlin",
     ".go": "go",
-    ".rs": "rust",
     ".c": "c",
-    ".h": "c",
     ".cpp": "cpp",
     ".cs": "csharp",
     ".php": "php",
-    ".rb": "ruby",
     ".swift": "swift",
-    ".sh": "bash",
+    # ".sh": "bash",
 }
 
 FUNCTION_NODE_TYPES = {
-    # These are common node.type names across popular tree-sitter grammars.
-    # You may tweak after printing node.type from your installed grammars.
     "python": {"function_definition"},
     "javascript": {
         "function_declaration",
         "function_expression",
-        "arrow_function",
+        # "arrow_function",
         "method_definition",
     },
     "typescript": {
         "function_declaration",
         "function_expression",
-        "arrow_function",
+        # "arrow_function",
         "method_definition",
     },
     "tsx": {
         "function_declaration",
         "function_expression",
-        "arrow_function",
+        # "arrow_function",
         "method_definition",
     },
     "java": {"method_declaration", "constructor_declaration"},
@@ -252,12 +212,10 @@ FUNCTION_NODE_TYPES = {
         "secondary_constructor",
     },
     "go": {"function_declaration", "method_declaration"},
-    "rust": {"function_item"},
     "c": {"function_definition"},
     "cpp": {"function_definition", "constructor_or_destructor_definition"},
     "csharp": {"method_declaration", "constructor_declaration"},
     "php": {"function_definition", "method_declaration"},
-    "ruby": {"method", "singleton_method"},
     "swift": {
         "function_declaration",
         "initializer_declaration",
@@ -268,17 +226,15 @@ FUNCTION_NODE_TYPES = {
 CLASS_NODE_TYPES: dict[str, set[str]] = {
     "python": {"class_definition"},
     "javascript": {"class_declaration"},
-    "typescript": {"class_declaration"},
-    "tsx": {"class_declaration"},
+    "typescript": {"class_declaration", "interface_declaration"},
+    "tsx": {"class_declaration", "interface_declaration"},
     "java": {"class_declaration", "interface_declaration"},
     "kotlin": {"class_declaration", "object_declaration", "interface_declaration"},
     "go": set(),  # go uses types; class-like structures differ
-    "rust": {"struct_item", "enum_item", "trait_item", "impl_item"},
     "c": set(),
     "cpp": {"class_specifier", "struct_specifier"},
     "csharp": {"class_declaration", "interface_declaration", "struct_declaration"},
     "php": {"class_declaration", "interface_declaration", "trait_declaration"},
-    "ruby": {"class", "module"},
     "swift": {
         "class_declaration",
         "struct_declaration",
@@ -286,6 +242,37 @@ CLASS_NODE_TYPES: dict[str, set[str]] = {
         "enum_declaration",
     },
 }
+
+BODY_FIELD_HINTS = (
+    "body",
+    "block",
+    "members",
+    "suite",
+)
+
+BODY_NODE_TYPES = (
+    # C / C++
+    "compound_statement",
+    "field_declaration_list",
+    # JS / TS / TSX
+    "statement_block",
+    # Kotlin
+    "class_body",
+    "function_body",
+    # Java
+    "class_body",
+    "interface_body",
+    # Common / generic
+    "block",
+    "declaration_list",
+    "interface_body",
+)
+
+
+SKIP_NODE_TYPES = {
+    "access_specifier",
+}
+
 # FUNC_HINTS = ("function", "method", "constructor")
 # CLASS_HINTS = ("class", "interface", "struct", "trait", "protocol", "object")
 # DECL_HINTS = ("declaration", "definition", "item")

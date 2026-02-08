@@ -86,6 +86,42 @@ def download_repo(http: requests.Session, owner: str, repo_name: str):
 
 # ==================================================================================================
 # file selection:
+def select_repo_files(
+    session: Session,
+    repo_id: int,
+    zip_file_path: str,
+    repo_name: str,
+    commit_sha: str,
+    max_size: int = 200_000,
+):  # 200KB per file
+    try:
+        selected_files: list[FileRead] = []
+        extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
+
+        with ZipFile(zip_file_path, "r") as zip:
+            for info in zip.infolist():
+                if info.is_dir() or info.file_size > max_size:
+                    continue
+
+                if (
+                    not is_skipped(info.filename)
+                    and not is_binary(zip, info)
+                    and is_selected(info.filename)
+                ):
+                    zip.extract(info.filename, extract_dir)
+                    file = store_file_to_db(session, repo_id, commit_sha, zip, info)
+                    selected_files.append(file)
+            session.commit()
+        return selected_files
+
+    except (BadZipFile, LargeZipFile) as e:
+        raise ExternalServiceError(service="ZIP", message="invalid zip archive") from e
+
+    except (PermissionError, FileNotFoundError, OSError) as e:
+        msg = str(e) or "Storage read failed"
+        raise StorageError(message=msg) from e
+
+
 def store_file_to_db(
     session: Session, repo_id: int, commit_sha: str, zip_file: ZipFile, info: ZipInfo
 ):
@@ -113,42 +149,6 @@ def store_file_to_db(
         if file_from_db is None:
             raise
         return FileRead.model_validate(file_from_db)
-
-
-def select_repo_files(
-    session: Session,
-    repo_id: int,
-    zip_file_path: str,
-    repo_name: str,
-    commit_sha: str,
-    max_size: int = 200_000,
-):  # 200KB per file
-    try:
-        selected_files: list[FileRead] = []
-        extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
-
-        with ZipFile(zip_file_path, "r") as zip:
-            for info in zip.infolist():
-                if info.is_dir() or info.file_size > max_size:
-                    continue
-
-                if (
-                    not is_skipped(info.filename)
-                    and not is_binary(zip, info)
-                    and is_selected(info.filename)
-                ):
-                    zip.extract(info.filename, extract_dir)
-                    file = store_file_to_db(session, repo_id, commit_sha, zip, info)
-                    selected_files.append(file)
-            # session.commit()
-        return selected_files
-
-    except (BadZipFile, LargeZipFile) as e:
-        raise ExternalServiceError(service="ZIP", message="invalid zip archive") from e
-
-    except (PermissionError, FileNotFoundError, OSError) as e:
-        msg = str(e) or "Storage read failed"
-        raise StorageError(message=msg) from e
 
 
 # ==================================================================================================
@@ -196,56 +196,20 @@ def chunk_text_files(
 
 # --------------------------------------------------------------------------------------------------
 # code files chunking:
-def build_class_summary(src: bytes, node: Node, repo_id: int, lang: str | None):
-    parts: list[str] = []
-
-    body = find_body(node)
-
-    header = (
-        slice_text(src, node.start_byte, body.start_byte)
-        if body
-        else node_text(src, node)
-    )
-    parts.append(header.strip())
-
-    simple_contents: list[str] = []
-    methods: list[str] = []
-
-    if body:
-        for child in body.children:
-            if is_function(child, lang=lang):
-                methods.append(node_signature(src, child))
-                continue
-
-            wrapped_function = unwrap_function(child)
-            if wrapped_function:
-                methods.append(node_signature(src, wrapped_function))
-                continue
-
-            # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
-            if not child.is_named and child.children:
-                continue
-
-            content = node_text(src, child).strip()
-            simple_contents.append(content)
-    if simple_contents:
-        parts.append(
-            "\nMembers/Comments:\n+" + "\n".join(f"- {m}" for m in simple_contents)
-        )
-    if methods:
-        parts.append("\nMethods:\n+" + "\n".join(f"- {m}" for m in methods))
-    return "\n".join(parts).strip()
-
-
 def build_file_summary(
     src: bytes, root: Node, repo_id: int, file: FileRead, session: Session, lang: str
 ):
     parts: list[str] = []
 
     classes_and_methods: list[str] = []
-    for child in root.children:
+    for child in root.named_children:
         if is_class(child, lang=lang) or is_function(child, lang=lang):
             classes_and_methods.append(node_signature(src, child))
+            continue
+
+        wrapped_node = unwrap_node(child, lang=lang)
+        if wrapped_node:
+            classes_and_methods.append(node_signature(src, wrapped_node))
             continue
 
         text = node_text(src, child)
@@ -256,7 +220,7 @@ def build_file_summary(
     if classes_and_methods:
         parts.append(
             "\nClasses/Methods in file:\n"
-            + "\n".join(f"- {item}" for item in classes_and_methods).strip()
+            + "\n".join(f"{item}" for item in classes_and_methods).strip()
         )
 
     text = "\n".join(parts).strip()
@@ -274,6 +238,50 @@ def build_file_summary(
     return stored_chunk
 
 
+def build_class_summary(src: bytes, node: Node, repo_id: int, lang: str | None):
+    parts: list[str] = []
+
+    body = find_body(node)
+
+    header = (
+        slice_text(src, node.start_byte, body.start_byte)
+        if body
+        else node_text(src, node)
+    )
+    parts.append(header.strip())
+
+    simple_contents: list[str] = []
+    classes_and_methods: list[str] = []
+
+    if body:
+        for child in body.named_children:
+            if child.type in SKIP_NODE_TYPES:
+                continue
+
+            if is_function(child, lang=lang) or is_class(child, lang=lang):
+                classes_and_methods.append(node_signature(src, child))
+                continue
+
+            wrapped_function = unwrap_node(child, lang=lang)
+            if wrapped_function:
+                classes_and_methods.append(node_signature(src, wrapped_function))
+                continue
+
+            # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
+            if not child.is_named and child.children:
+                continue
+
+            content = node_text(src, child).strip()
+            simple_contents.append(content)
+    if simple_contents:
+        parts.append(
+            "\nMembers/Comments:\n" + "\n".join(f"{m}" for m in simple_contents)
+        )
+    if classes_and_methods:
+        parts.append("\nMethods:\n" + "\n".join(f"{m}" for m in classes_and_methods))
+    return "\n".join(parts).strip()
+
+
 def visit_node(
     node: Node,
     repo_id: int,
@@ -285,9 +293,6 @@ def visit_node(
     chunk_parent_id: int | None = None,
 ):
     is_fn = is_function(node, lang=lang)
-    print(lang)
-    print(node)
-    print(is_fn)
     is_cls = is_class(node, lang=lang)
 
     if is_fn:
@@ -335,6 +340,8 @@ def visit_node(
         )
 
 
+# --------------------------------------------------------------------------------------------------
+# long function block chunking:
 # what im trying to do:
 # I check the length of the function, if long then go into children, chunk them, check the children length, if long chunk them too
 # I'm trying to keep order of statements in account
@@ -503,6 +510,9 @@ def split_large_func_in_chunks(
     return blocks_data
 
 
+# --------------------------------------------------------------------------------------------------
+
+
 def chunk_code_files(
     file: FileRead, repo_id: int, repo_name: str, session: Session
 ) -> list[ChunkRead]:
@@ -549,7 +559,6 @@ def store_chunk_in_db(
     end_line: int | None = None,
     chunk_parent_id: int | None = None,
 ):
-    print(repo_id)
     data: dict[str, int | str] = {
         "repo_id": repo_id,
         "file_id": file_id,

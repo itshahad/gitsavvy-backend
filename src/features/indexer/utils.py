@@ -57,20 +57,20 @@ def is_selected(file_path: str) -> bool:
     if any(p.startswith(prefix) for prefix in IMPORTANT_PREFIXES):
         return True
 
-    if ext(p) in CODE_EXT:
+    if ext(p) in AST_LANG_EXT or ext(p) in TEXT_LANG_EXT:
         return True
 
     return False
 
 
 def find_body(node: Node) -> Node | None:
-    for hint in ("body", "block", "members", "suite"):
+    for hint in BODY_FIELD_HINTS:
         b = node.child_by_field_name(hint)
         if b is not None:
             return b
 
     for ch in node.named_children:
-        if ch.type in ("compound_statement", "block"):
+        if ch.type in BODY_NODE_TYPES:
             return ch
 
     return None
@@ -129,9 +129,14 @@ def block_placeholder(src: bytes, node: Node) -> str:
     return f"\n/* CHILD: {node.type} ({start} - {end}) {first_line} */\n"
 
 
-def unwrap_function(wrapper: Node, lang: str | None = None):
+def unwrap_node(wrapper: Node, lang: str | None = None):
+    if wrapper.type == "decorated_definition":
+        inner = wrapper.child_by_field_name("definition")
+        if inner and (is_function(inner, lang=lang) or is_class(inner, lang=lang)):
+            return inner
+
     for child in wrapper.named_children:
-        if is_function(child, lang=lang):
+        if is_function(child, lang=lang) or is_class(child, lang=lang):
             return child
     return None
 
