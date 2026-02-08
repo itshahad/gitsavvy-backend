@@ -10,6 +10,7 @@
         "embedder",
         "HUGGINGFACE",
         "onupdate",
-        "sessionmaker"
+        "sessionmaker",
+        "zipball"
     ]
 }

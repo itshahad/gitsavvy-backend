@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
-from src.config import MAX_LINES_NUM, MAX_FUNC_SPLITTING_DEPTH, OVERLAPPING_LINES_NUM
+from src.config import (
+    MAX_LINES_NUM,
+    MAX_FUNC_SPLITTING_DEPTH,
+    MIN_TAIL_LINES,
+    OVERLAPPING_LINES_NUM,
+)
 from pgvector.sqlalchemy import Vector  # type: ignore
 
 
@@ -173,17 +178,34 @@ def chunk_text_files(
 
         step = chunk_size - overlapping
 
+        raw_chunks: list[tuple[int, int, str]] = []
+
         for i in range(0, len(lines), step):
-            chunk = lines[i : i + chunk_size]
+            start = i
+            end = min(i + chunk_size, len(lines))
+            chunk = lines[i:end]
             text = "\n".join(chunk).strip()
+            if text:
+                raw_chunks.append((start, end, text))
+
+        if len(raw_chunks) >= 2:
+            tail_start, tail_end, tail_text = raw_chunks[-1]
+            tail_lines = tail_end - tail_start
+            if tail_lines <= MIN_TAIL_LINES:
+                prev_start, _, prev_text = raw_chunks[-2]
+                new_text = prev_text + "\n" + tail_text
+                raw_chunks[-2] = (prev_start, tail_end, new_text.strip())
+                raw_chunks.pop()
+
+        for start_line, end_line, text in raw_chunks:
             db_chunk = store_chunk_in_db(
                 session,
                 repo_id=repo_id,
                 file_id=file.id,
                 file_path=file.file_path,
                 type=ChunkType.TEXT.value,
-                start_line=i + 1,
-                end_line=min(i + chunk_size, len(lines)),
+                start_line=start_line,
+                end_line=end_line,
                 content=text,
                 content_hash=hash_text(text),
             )
