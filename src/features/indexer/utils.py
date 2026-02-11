@@ -5,7 +5,7 @@ from pathlib import Path
 from src.features.indexer.constants import *
 from tree_sitter import Node
 from sqlalchemy.orm import Session
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 from sqlalchemy.sql import Select
 
 T = TypeVar("T")
@@ -183,3 +183,7 @@ def dict_to_text(d: dict[str, str]) -> str:
 def get_item_from_db(session: Session, stmt: Select[tuple[T]]) -> T | None:
     result = session.execute(stmt).first()
     return result[0] if result else None
+
+
+def tensor_to_vector(t: Any) -> list[list[float]]:
+    return cast(list[list[float]], t.detach().cpu().tolist())
