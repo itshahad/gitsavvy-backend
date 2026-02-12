@@ -91,16 +91,46 @@ def batch_encoding(tokens_list, tokenizer, device):
     return batch
 
 
-def embed_texts(batch_dict, model):
+# def embed_texts(batch_dict, model):
+#     import torch
+#     import torch.nn.functional as F
+
+#     with torch.no_grad():
+#         outputs = model(**batch_dict)
+#         embeddings = last_token_pool(
+#             outputs.last_hidden_state, batch_dict["attention_mask"]
+#         )
+#         embeddings = F.normalize(embeddings, p=2, dim=1)
+
+#         return embeddings
+#     # store embed in db
+
+
+def embed_texts(batch_dict, model, batch_size: int = 8):
     import torch
     import torch.nn.functional as F
 
-    with torch.no_grad():
-        outputs = model(**batch_dict)
-        embeddings = last_token_pool(
-            outputs.last_hidden_state, batch_dict["attention_mask"]
-        )
-        embeddings = F.normalize(embeddings, p=2, dim=1)
+    input_ids = batch_dict["input_ids"]
+    attention_mask = batch_dict["attention_mask"]
 
-        return embeddings
-    # store embed in db
+    all_embeddings = []
+
+    for i in range(0, input_ids.size(0), batch_size):
+        batch_slice = {
+            "input_ids": input_ids[i : i + batch_size],
+            "attention_mask": attention_mask[i : i + batch_size],
+        }
+
+        with torch.inference_mode():
+            outputs = model(**batch_slice)
+
+            embeddings = last_token_pool(
+                outputs.last_hidden_state,
+                batch_slice["attention_mask"],
+            )
+
+            embeddings = F.normalize(embeddings, p=2, dim=1)
+
+        all_embeddings.append(embeddings)
+
+    return torch.cat(all_embeddings, dim=0)
