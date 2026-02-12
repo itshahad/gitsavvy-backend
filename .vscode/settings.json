@@ -1,0 +1,17 @@
+{
+    "python.analysis.typeCheckingMode": "strict",
+    "python.linting.enabled": true,
+    "python.linting.ruffEnabled": true,
+    "editor.formatOnSave": true,
+    "python.formatting.provider": "black",
+    "cSpell.words": [
+        "autoflush",
+        "BAAI",
+        "dotenv",
+        "embedder",
+        "HUGGINGFACE",
+        "onupdate",
+        "sessionmaker",
+        "zipball"
+    ]
+}
