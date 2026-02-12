@@ -16,8 +16,9 @@ from src.features.indexer.models import (
     Repository,
     RepositoryTopic,
 )
-from src.features.indexer.schemas import FileRead, TopicRead
+from src.features.indexer.schemas import ChunkRead, FileRead, TopicRead
 from src.features.indexer.service import ChunkingService, RepoService
+from src.features.indexer.utils import hash_text
 
 
 TEST_DB_URL = "sqlite+pysqlite:///:memory:"
@@ -143,7 +144,7 @@ def test_select_repo_files_real_zip_and_db(
     monkeypatch: pytest.MonkeyPatch,
     case: str,
     make_zip: str | None,
-    zip_path: str | None,
+    zip_path: Path | None,
     repo_name: str,
     should_raise: bool,
     expected_exc: Optional[Type[BaseException]],
@@ -164,17 +165,17 @@ def test_select_repo_files_real_zip_and_db(
 
     # --- create a real zip on disk ---
     if make_zip == "valid":
-        zfile = tmp_path / "repo.zip"
+        zfile = Path(tmp_path / "repo.zip")
         with ZipFile(zfile, "w", compression=ZIP_DEFLATED) as z:
             z.writestr("README.md", "hello\nworld\n")
             z.writestr("src/main.py", "print('hi')\n")
             z.writestr("big.txt", "x" * 300_000)  # > 200KB (skipped by size)
-        zip_file_path = str(zfile)
+        zip_file_path: Path = zfile
 
     elif make_zip == "bad":
         zfile = tmp_path / "not_a_zip.zip"
         zfile.write_bytes(b"this is not a zip")
-        zip_file_path = str(zfile)
+        zip_file_path = zfile
 
     else:
         assert zip_path is not None  # type narrowing
@@ -240,10 +241,45 @@ def test_select_repo_files_real_zip_and_db(
 
 # ============================================================================================
 
+example_encoding = {
+    "input_ids": [
+        101,  # <s> or BOS token
+        2483,  # def
+        3712,  # add
+        1006,  # (
+        1037,  # a
+        1010,  # ,
+        1038,  # b
+        1007,  # )
+        1024,  # :
+        2707,  # return
+        1037,  # a
+        1009,  # +
+        1038,  # b
+        102,  # </s> or EOS token
+    ],
+    "attention_mask": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+}
+
+fake_chunk = ChunkRead(
+    id=1,
+    repo_id=2,
+    chunk_parent_id=None,
+    file_path="dummy.c",
+    content="hello_world",
+    content_hash=hash_text("hello_world"),
+    type=ChunkType.FUNCTION,
+    file_id=123,
+    start_line=1,
+    end_line=5,
+)
+
 
 class DummyEmbeddingService:
-    def tokenize_node(self, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
+    def tokenize_node(
+        self, *args: Any, **kwargs: Any
+    ) -> tuple[list[ChunkRead], list[Any] | None]:
+        return [fake_chunk], [example_encoding]
 
 
 def make_get_file_complete_path(tmp_path: Path):
@@ -495,12 +531,12 @@ def test_chunk_repo_files_including_code_chunks(
     if should_raise:
         assert expected_exc is not None
         with pytest.raises(expected_exc):
-            chunker.chunk_repo_files(str(zpath), commit_sha)
+            chunker.chunk_repo_files(zpath, commit_sha)
         return
 
     # code chunking requires parser; skip cleanly if not available
     try:
-        _chunks = chunker.chunk_repo_files(str(zpath), commit_sha)
+        _chunks = chunker.chunk_repo_files(zpath, commit_sha)
     except Exception as e:
         pytest.skip(f"Tree-sitter/parser not available in this test env: {e}")
 
