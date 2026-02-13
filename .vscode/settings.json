@@ -9,7 +9,9 @@
         "BAAI",
         "dotenv",
         "embedder",
+        "embs",
         "HUGGINGFACE",
+        "keepdim",
         "onupdate",
         "sessionmaker",
         "zipball"
