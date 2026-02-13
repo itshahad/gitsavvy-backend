@@ -1,6 +1,8 @@
 from typing import TypedDict
 from celery import Task  # type: ignore
 import requests
+from src.config import MAX_LINES_NUM
+from src.features.indexer.embedder import get_embedder_model, get_tokenizer
 from src.features.indexer.service import ChunkingService, EmbeddingService, RepoService
 
 from src.worker import worker
@@ -23,6 +25,11 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
     db_session = SessionLocal()
     http = requests.session()
 
+    embedder = get_embedder_model()
+    tokenizer = get_tokenizer()
+
+    print(MAX_LINES_NUM)
+
     repo_service = RepoService(
         db_session=db_session, http_session=http, repo_name=repo_name
     )
@@ -44,7 +51,10 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
         self.update_state(state="PROGRESS", meta={"step": "chunking"})  # type: ignore
 
         embedding_service = EmbeddingService(
-            db_session=db_session, chunking_service=None
+            db_session=db_session,
+            chunking_service=None,
+            embedder=embedder,
+            tokenizer=tokenizer,
         )
 
         chunking_service = ChunkingService(
@@ -57,13 +67,13 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
 
         embedding_service.chunking_service = chunking_service
 
-        chunks_and_encodings = chunking_service.chunk_repo_files(
+        chunks = chunking_service.chunk_repo_files(
             zip_file_path=repo_path,
             commit_sha=commit_sha,
         )
 
         embeddings = embedding_service.embed_chunks(
-            chunks_and_encoding=chunks_and_encodings,
+            chunks=chunks, tokenizer=tokenizer, embedder=embedder
         )
 
         db_session.commit()
@@ -74,7 +84,7 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
             "owner": repo_owner,
             "name": repo_name,
             "commit_sha": commit_sha,
-            "chunks_created": len(chunks_and_encodings),
+            "chunks_created": len(chunks),
             "encodings_created": len(embeddings),
         }
     except Exception:

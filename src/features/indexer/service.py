@@ -5,7 +5,7 @@ from zipfile import ZipFile, BadZipFile, LargeZipFile
 from tree_sitter_language_pack import get_parser
 from src.features.indexer.constants import *
 from src.features.indexer.config import *
-from src.features.indexer.embedder import batch_encoding, check_tokens, embed_texts, get_embedder_model, get_tokenizer  # type: ignore
+from src.features.indexer.embedder import batch_encoding, embed_text, embed_texts  # type: ignore
 from src.features.indexer.utils import *
 from src.features.indexer.schemas import *
 from src.features.indexer.models import *
@@ -16,17 +16,13 @@ from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 from src.config import (
     MAX_LINES_NUM,
-    MAX_FUNC_SPLITTING_DEPTH,
     MIN_TAIL_LINES,
     OVERLAPPING_LINES_NUM,
 )
-from pgvector.sqlalchemy import Vector  # type: ignore
 
 
 # ==================================================================================================
 # Github:
-
-
 class RepoService:
     def __init__(
         self, db_session: Session, http_session: requests.Session, repo_name: str
@@ -35,11 +31,7 @@ class RepoService:
         self.http_session = http_session
         self.repo_path = get_repo_path(repo_name=repo_name)
 
-    def get_repo_metadata(
-        self,
-        owner: str,
-        repo_name: str,
-    ):
+    def get_repo_metadata(self, owner: str, repo_name: str, is_commit: bool = False):
         try:
             r = self.http_session.get(
                 f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers()
@@ -55,6 +47,7 @@ class RepoService:
                     str(repo_metadata.avatar_url) if repo_metadata.avatar_url else None
                 ),
             )
+
             self.db_session.add(repo_data)
             self.db_session.flush()  # to get an id
             self.db_session.add_all(
@@ -63,9 +56,13 @@ class RepoService:
                     for t in repo_metadata.topics
                 ]
             )
-            # session.commit()
             self.db_session.refresh(repo_data)
+
+            if is_commit:
+                self.db_session.commit()
+
             return RepoRead.model_validate(repo_data)
+
         except IntegrityError as e:
             self.db_session.rollback()
             stmt = select(Repository).where(
@@ -75,6 +72,7 @@ class RepoService:
             if repo_from_db is None:
                 raise
             return RepoRead.model_validate(repo_from_db)
+
         except Exception as e:
             raise_request_exception(e=e, owner=owner, repo_name=repo_name)
 
@@ -111,6 +109,7 @@ class RepoService:
         repo_name: str,
         commit_sha: str,
         max_size: int = 200_000,
+        is_commit: bool = False,
     ):  # 200KB per file
         try:
             selected_files: list[FileRead] = []
@@ -129,7 +128,9 @@ class RepoService:
                         zip.extract(info.filename, extract_dir)
                         file = self.store_file_to_db(repo_id, commit_sha, zip, info)
                         selected_files.append(file)
-                self.db_session.commit()
+
+                if is_commit:
+                    self.db_session.commit()
             return selected_files
 
         except (BadZipFile, LargeZipFile) as e:
@@ -156,6 +157,7 @@ class RepoService:
             file_db = File(**file_data.model_dump())
             self.db_session.add(file_db)
             self.db_session.flush()
+            self.db_session.refresh(file_db)
             return FileRead.model_validate(file_db)
         except IntegrityError:
             self.db_session.rollback()
@@ -194,12 +196,13 @@ class ChunkingService:
         file: FileRead,
         chunk_size: int = MAX_LINES_NUM,
         overlapping: int = OVERLAPPING_LINES_NUM,
+        min_tail_lines: int = MIN_TAIL_LINES,
     ):
         try:
             if overlapping >= chunk_size:
                 raise ValueError("overlapping value must be less than chunk_size")
 
-            chunks_and_encoding: list[tuple[ChunkRead, Any]] = []
+            chunks: list[ChunkRead] = []
             file_path = get_file_complete_path(file.file_path, self.repo_name)
 
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -220,22 +223,17 @@ class ChunkingService:
             if len(raw_chunks) >= 2:
                 tail_start, tail_end, tail_text = raw_chunks[-1]
                 tail_lines = tail_end - tail_start
-                if tail_lines <= MIN_TAIL_LINES:
+                if tail_lines <= min_tail_lines:
                     prev_start, _, prev_text = raw_chunks[-2]
                     new_text = prev_text + "\n" + tail_text
-                    raw_chunks[-2] = (prev_start, tail_end, new_text.strip())
+                    raw_chunks[-2] = (
+                        prev_start,
+                        tail_end,
+                        new_text.strip(),
+                    )
                     raw_chunks.pop()
 
             for start_line, end_line, text in raw_chunks:
-                encodings, _ = self.embedding_service.tokenize_node(
-                    text=text,
-                    node=None,
-                    lang=None,
-                    file=file,
-                    chunk_parent_id=None,
-                    src=None,
-                )
-
                 db_chunk = self.store_chunk_in_db(
                     file_id=file.id,
                     file_path=file.file_path,
@@ -245,10 +243,8 @@ class ChunkingService:
                     content=text,
                     content_hash=hash_text(text),
                 )
-                chunks_and_encoding.append(
-                    (ChunkRead.model_validate(db_chunk), encodings[0])
-                )
-            return chunks_and_encoding
+                chunks.append(ChunkRead.model_validate(db_chunk))
+            return chunks
         except (PermissionError, FileNotFoundError, OSError) as e:
             msg = str(e) or "Storage read failed"
             raise StorageError(message=msg) from e
@@ -281,15 +277,6 @@ class ChunkingService:
 
         text = "\n".join(parts).strip()
 
-        encodings, _ = self.embedding_service.tokenize_node(
-            text=text,
-            node=None,
-            lang=None,
-            file=file,
-            chunk_parent_id=None,
-            src=None,
-        )
-
         stored_chunk = self.store_chunk_in_db(
             file_id=file.id,
             file_path=file.file_path,
@@ -297,8 +284,7 @@ class ChunkingService:
             content=text,
             content_hash=hash_text(text),
         )
-        print(f"stored_chunk -> {stored_chunk}")
-        return stored_chunk, encodings[0]
+        return stored_chunk
 
     def build_class_summary(self, src: bytes, node: Node, lang: str | None):
         parts: list[str] = []
@@ -350,7 +336,7 @@ class ChunkingService:
         file: FileRead,
         node: Node,
         src: bytes,
-        chunks_and_encoding: list[tuple[ChunkRead, Any]],
+        chunks: list[ChunkRead],
         lang: str | None,
         chunk_parent_id: int | None = None,
     ):
@@ -359,42 +345,20 @@ class ChunkingService:
 
         if is_fn:
             text = node_text(src, node)
-            encodings, blocks = self.embedding_service.tokenize_node(
-                text=text,
-                node=node,
-                file=file,
-                lang=lang,
+            db_chunk = self.store_chunk_in_db(
+                file_id=file.id,
+                file_path=file.file_path,
+                type=ChunkType.FUNCTION.value,
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                content=text,
+                content_hash=hash_text(text),
                 chunk_parent_id=chunk_parent_id,
-                src=src,
             )
-            if blocks == None or len(blocks) == 0:
-                db_chunk = self.store_chunk_in_db(
-                    file_id=file.id,
-                    file_path=file.file_path,
-                    type=ChunkType.FUNCTION.value,
-                    start_line=node.start_point[0] + 1,
-                    end_line=node.end_point[0] + 1,
-                    content=text,
-                    content_hash=hash_text(text),
-                    chunk_parent_id=chunk_parent_id,
-                )
-                chunks_and_encoding.append(
-                    (ChunkRead.model_validate(db_chunk), encodings[0])
-                )
-            else:
-                chunks_and_encoding.extend(list(zip(blocks, encodings)))
+            chunks.append(ChunkRead.model_validate(db_chunk))
             return
         elif is_cls:
             text = self.build_class_summary(src, node, lang)
-            encodings, _ = self.embedding_service.tokenize_node(
-                text=text,
-                node=node,
-                lang=lang,
-                file=file,
-                chunk_parent_id=chunk_parent_id,
-                src=src,
-            )
-
             db_chunk = self.store_chunk_in_db(
                 file_id=file.id,
                 file_path=file.file_path,
@@ -405,199 +369,31 @@ class ChunkingService:
                 content_hash=hash_text(text),
                 chunk_parent_id=chunk_parent_id,
             )
-            chunks_and_encoding.append(
-                (ChunkRead.model_validate(db_chunk), encodings[0])
-            )
-
+            chunks.append(ChunkRead.model_validate(db_chunk))
             for child in node.children:
                 self.visit_node(
                     file=file,
                     node=child,
                     src=src,
-                    chunks_and_encoding=chunks_and_encoding,
+                    chunks=chunks,
                     lang=lang,
                     chunk_parent_id=db_chunk.id,
                 )
-
             return
-
         for child in node.children:
             self.visit_node(
                 file=file,
                 node=child,
                 src=src,
-                chunks_and_encoding=chunks_and_encoding,
+                chunks=chunks,
                 lang=lang,
                 chunk_parent_id=chunk_parent_id,
             )
 
     # --------------------------------------------------------------------------------------------------
-    # long function block chunking:
-    # what im trying to do:
-    # I check the length of the function, if long then go into children, chunk them, check the children length, if long chunk them too
-    # I'm trying to keep order of statements in account
-    def collect_blocks(self, node: Node, max_lines: int = MAX_LINES_NUM):
-        blocks: list[Node] = []
 
-        body = find_body(node)
-        if not body:
-            return blocks
-
-        for child in body.named_children:
-            if is_block(child) and (node_line_count(child) > max_lines):
-                blocks.append(child)
-        return blocks
-
-    def build_parent_with_placeholders(
-        self, src: bytes, node: Node, extracted_nodes: list[Node]
-    ):
-        body = find_body(node)
-        if not body:
-            return node_text(src, node)
-
-        blocks = sorted(extracted_nodes, key=lambda n: n.start_byte)
-
-        out: list[str] = []
-
-        cursor = body.start_byte
-        if src[cursor : cursor + 1] == b"{":
-            cursor += 1
-
-        for block in blocks:
-            out.append(slice_text(src=src, a=cursor, b=block.start_byte))
-            out.append(block_placeholder(src=src, node=block))
-            cursor = block.end_byte
-
-        out.append(slice_text(src=src, a=cursor, b=body.end_byte))
-
-        function_signature = node_signature(src, node)
-        return function_signature + "\n" + "".join(out)
-
-    def func_children_chunks(
-        self,
-        file: FileRead,
-        src: bytes,
-        child_node: Node,
-        parent_id: int,
-        depth: int,
-        max_depth: int,
-        max_lines: int,
-    ):
-        blocks_data: list[ChunkRead] = []
-
-        if depth + 1 <= max_depth:
-            inner_blocks = self.collect_blocks(node=child_node, max_lines=max_lines)
-            function_placeholder = self.build_parent_with_placeholders(
-                src=src, node=child_node, extracted_nodes=inner_blocks
-            )
-            function_placeholder = normalize_newlines(function_placeholder)
-
-            db_chunk = self.store_chunk_in_db(
-                file_id=file.id,
-                file_path=file.file_path,
-                type=ChunkType.FUNCTION_INNER_BLOCK.value,
-                start_line=child_node.start_point[0] + 1,
-                end_line=child_node.end_point[0] + 1,
-                content=function_placeholder,
-                content_hash=hash_text(function_placeholder),
-                chunk_parent_id=parent_id,
-            )
-
-            blocks_data.append(ChunkRead.model_validate(db_chunk))
-            parent_id = db_chunk.id
-
-            for child in inner_blocks:
-                blocks_data.extend(
-                    self.func_children_chunks(
-                        file=file,
-                        src=src,
-                        child_node=child,
-                        parent_id=parent_id,
-                        depth=depth + 1,
-                        max_depth=max_depth,
-                        max_lines=max_lines,
-                    )
-                )
-        else:
-            text = node_text(src=src, node=child_node)
-            text = normalize_newlines(text)
-
-            db_chunk = self.store_chunk_in_db(
-                file_id=file.id,
-                file_path=file.file_path,
-                type=ChunkType.FUNCTION_INNER_BLOCK.value,
-                start_line=child_node.start_point[0] + 1,
-                end_line=child_node.end_point[0] + 1,
-                content=text,
-                content_hash=hash_text(text),
-                chunk_parent_id=parent_id,
-            )
-            blocks_data.append(ChunkRead.model_validate(db_chunk))
-
-        return blocks_data
-
-    def split_large_func_in_chunks(
-        self,
-        file: FileRead,
-        src: bytes,
-        node: Node,
-        chunk_parent_id: int | None = None,
-        depth: int = 0,
-        max_depth: int = MAX_FUNC_SPLITTING_DEPTH,
-        max_lines: int = MAX_LINES_NUM,
-    ) -> tuple[int, list[ChunkRead]]:
-        blocks_data: list[ChunkRead] = []
-        body = find_body(node)
-
-        if not body:
-            raise ValueError(
-                f"Failed to split function "
-                f"{node.start_point[0]+1}-{node.end_point[0]+1} "
-                f"in file {file.file_path}"
-            )
-
-        direct_blocks = self.collect_blocks(node=node, max_lines=max_lines)
-
-        function_placeholder = self.build_parent_with_placeholders(
-            src=src, node=node, extracted_nodes=direct_blocks
-        )
-        function_placeholder = normalize_newlines(function_placeholder)
-
-        db_chunk = self.store_chunk_in_db(
-            file_id=file.id,
-            file_path=file.file_path,
-            type=ChunkType.FUNCTION.value,
-            start_line=node.start_point[0] + 1,
-            end_line=node.end_point[0] + 1,
-            content=function_placeholder,
-            content_hash=hash_text(function_placeholder),
-            chunk_parent_id=chunk_parent_id,
-        )
-
-        blocks_data.append(ChunkRead.model_validate(db_chunk))
-        parent_id: int = db_chunk.id
-
-        for block in direct_blocks:
-            blocks_data.extend(
-                self.func_children_chunks(
-                    src=src,
-                    file=file,
-                    child_node=block,
-                    parent_id=parent_id,
-                    depth=depth + 1,
-                    max_depth=max_depth,
-                    max_lines=max_lines,
-                )
-            )
-
-        return parent_id, blocks_data
-
-    # --------------------------------------------------------------------------------------------------
-
-    def chunk_code_files(self, file: FileRead) -> list[tuple[ChunkRead, Any]]:
-        # chunks: list[ChunkRead] = []
-        # encodings: list[Any] = []
-        chunks_and_encoding: list[tuple[ChunkRead, Any]] = []
+    def chunk_code_files(self, file: FileRead) -> list[ChunkRead]:
+        chunks: list[ChunkRead] = []
 
         file_path = get_file_complete_path(file.file_path, self.repo_name)
         file_ext = ext(file_path)
@@ -612,19 +408,18 @@ class ChunkingService:
         tree = parser.parse(file_bytes)
         root = tree.root_node
 
-        db_file_chunk, encoding = self.build_file_summary(file, file_bytes, root, lang)
-        # chunks.append(ChunkRead.model_validate(db_file_chunk))
-        chunks_and_encoding.append((ChunkRead.model_validate(db_file_chunk), encoding))
+        db_file_chunk = self.build_file_summary(file, file_bytes, root, lang)
+        chunks.append(ChunkRead.model_validate(db_file_chunk))
         self.visit_node(
             file,
             root,
             file_bytes,
-            chunks_and_encoding,
+            chunks,
             lang,
             chunk_parent_id=db_file_chunk.id,
         )
 
-        return chunks_and_encoding
+        return chunks
 
     # --------------------------------------------------------------------------------------------------
 
@@ -659,10 +454,13 @@ class ChunkingService:
         chunk_db = Chunk(**chunk_data.model_dump())
         self.db_session.add(chunk_db)
         self.db_session.flush()
+        self.db_session.refresh(chunk_db)
         return chunk_db
 
-    def chunk_repo_files(self, zip_file_path: Path, commit_sha: str):
-        chunks_and_encoding: list[tuple[ChunkRead, Any]] = []
+    def chunk_repo_files(
+        self, zip_file_path: Path, commit_sha: str, is_commit: bool = False
+    ):
+        chunks: list[ChunkRead] = []
         selected_files = self.repo_service.select_repo_files(
             self.repo_id, zip_file_path, self.repo_name, commit_sha
         )
@@ -672,22 +470,29 @@ class ChunkingService:
 
             if e in AST_LANG_EXT:
                 print(f"AST_LANG_EXT -> {file.file_path}")
-                chunks_and_encoding.extend(self.chunk_code_files(file))
+                chunks.extend(self.chunk_code_files(file))
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file.file_path}")
-                chunks_and_encoding.extend(self.chunk_text_files(file))
-        # session.commit()
-        return chunks_and_encoding
+                chunks.extend(self.chunk_text_files(file))
+        if is_commit:
+            self.db_session.commit()
+        return chunks
 
 
 # ==================================================================================================
 # embedding:
 class EmbeddingService:
     def __init__(
-        self, db_session: Session, chunking_service: "ChunkingService | None"
+        self,
+        db_session: Session,
+        embedder: Any,
+        tokenizer: Any,
+        chunking_service: "ChunkingService | None",
     ) -> None:
         self.db_session = db_session
         self.chunking_service = chunking_service
+        self.embedder = embedder
+        self.tokenizer = tokenizer
 
     def store_embedding(self, chunk_id: int, embedding_vector: list[float]):
         embedding_data = ChunkEmbeddingCreate.model_validate(
@@ -696,76 +501,32 @@ class EmbeddingService:
         embedding_db = ChunkEmbedding(**embedding_data.model_dump())
         self.db_session.add(embedding_db)
         self.db_session.flush()
+        self.db_session.refresh(embedding_db)
         return embedding_db
 
-    def tokenize_node(
+    def embed_chunks(
         self,
-        node: Node | None,
-        lang: str | None,
-        text: str,
-        file: FileRead,
-        chunk_parent_id: int | None,
-        src: bytes | None,
+        chunks: list[ChunkRead],
+        tokenizer: Any,
+        embedder: Any,
+        is_commit: bool = False,
     ):
-        if self.chunking_service is None:
-            raise RuntimeError("EmbeddingService not wired into ChunkingService")
-
-        tokenizer: Any = get_tokenizer()
-        enc, is_safe = check_tokens(tokenizer=tokenizer, input_text=text)
-
-        try:
-            if not is_safe and (
-                node != None and is_function(node, lang=lang) and src != None
-            ):
-                encoding: list[Any] = []
-                parent_id, blocks = self.chunking_service.split_large_func_in_chunks(
-                    file=file, chunk_parent_id=chunk_parent_id, node=node, src=src
-                )
-                for b in blocks:
-                    new_enc, _ = self.tokenize_node(
-                        text=b.content,
-                        lang=lang,
-                        file=file,
-                        chunk_parent_id=parent_id,
-                        node=None,
-                        src=src,
-                    )
-                    encoding.extend(new_enc)
-                return encoding, blocks
-            else:
-                return [enc], None
-        except ValueError:
-            raise
-        except Exception as e:
-            if node != None:
-                raise TokenizationError(
-                    f"Failed to tokenize node at lines "
-                    f"{node.start_point[0]+1}-{node.end_point[0]+1} "
-                    f"in file {file.file_path}"
-                )
-            else:
-                raise TokenizationError(
-                    f"Failed to tokenize node at lines " f"in file {file.file_path}"
-                ) from e
-
-    def embed_chunks(self, chunks_and_encoding: list[tuple[ChunkRead, Any]]):
-        embedder: Any = get_embedder_model()
-        tokenizer: Any = get_tokenizer()
         device = next(embedder.parameters()).device
-
-        chunks, encodings = zip(*chunks_and_encoding)
-        chunks = list(chunks)
-        encodings = list(encodings)
-
-        batched_encoding = batch_encoding(
-            tokens_list=encodings, device=device, tokenizer=tokenizer
-        )
-
-        mbd = embed_texts(batch_dict=batched_encoding, model=embedder, batch_size=8)
-        mbd = tensor_to_vector(mbd)
-
         embeddings: list[ChunkEmbeddingRead] = []
-        for chunk, vector in zip(chunks, mbd):
-            embedding = self.store_embedding(chunk_id=chunk.id, embedding_vector=vector)
-            embeddings.append(ChunkEmbeddingRead.model_validate(embedding))
+        for chunk in chunks:
+            vec, _meta = embed_text(
+                text=chunk.content,
+                tokenizer=tokenizer,
+                model=embedder,
+                batch_encoding=batch_encoding,
+                embed_texts=embed_texts,
+                device=device,
+            )
+
+            print(_meta)
+            embedding_db = self.store_embedding(chunk_id=chunk.id, embedding_vector=vec)
+            embeddings.append(ChunkEmbeddingRead.model_validate(embedding_db))
+
+        if is_commit:
+            self.db_session.commit()
         return embeddings
