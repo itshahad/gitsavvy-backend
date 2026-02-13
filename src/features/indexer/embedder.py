@@ -1,7 +1,13 @@
-
 # type: ignore [all]
 from typing import Any
-from src.config import EMBEDDING_MODEL_NAME, EMBEDDING_MAX_TOKENS, HF_HOME, OVERLAP_TOKENS, WINDOW_TOKENS, MIN_LAST_WINDOW_TOKENS, 
+from src.config import (
+    EMBEDDING_MODEL_NAME,
+    EMBEDDING_MAX_TOKENS,
+    HF_HOME,
+    OVERLAP_TOKENS,
+    WINDOW_TOKENS,
+    MIN_LAST_WINDOW_TOKENS,
+)
 import threading
 from dataclasses import dataclass
 
@@ -201,7 +207,7 @@ def infer_embedding(
     return torch.cat(outs, dim=0)
 
 
-#combine windows embeddings:
+# combine windows embeddings:
 def mean_pool_embeddings(window_embs, normalize: bool = True):
     import torch.nn.functional as F
 
@@ -269,4 +275,3 @@ def embed_text(
         "overlap_tokens": window_spec.overlap_tokens,
     }
     return vec, meta
-
