@@ -13,6 +13,7 @@
         "HUGGINGFACE",
         "keepdim",
         "onupdate",
+        "Qwen",
         "sessionmaker",
         "zipball"
     ]
