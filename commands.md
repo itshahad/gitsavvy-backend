@@ -5,3 +5,5 @@ docker-compose up -d --build
 
 psql -U gitsavvy -d gitsavvy_db
 CREATE EXTENSION vector;
+
+celery -A src.worker:worker purge -f

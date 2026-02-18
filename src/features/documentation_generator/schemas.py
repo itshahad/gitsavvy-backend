@@ -1,15 +1,19 @@
-#pydantic models
+from pydantic import BaseModel, ConfigDict
 
-# from pydantic import BaseModel, EmailStr
+# ====================================================================
 
-# class UserCreate(BaseModel):
-#     name: str
-#     email: EmailStr
 
-# class UserResponse(BaseModel):
-#     id: int
-#     name: str
-#     email: EmailStr
+class DocumentationModel(BaseModel):
+    chunk_id: int
+    short_summary: str
+    detailed_doc: str
 
-#     class Config:
-#         from_attributes = True
+
+class DocCreate(DocumentationModel):
+    pass
+
+
+class DocRead(DocumentationModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int

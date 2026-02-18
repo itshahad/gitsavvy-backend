@@ -28,6 +28,7 @@ def make_celery(include_task: bool):
         worker.autodiscover_tasks(
             [
                 "src.features.indexer",
+                "src.features.documentation_generator",
             ]
         )
 

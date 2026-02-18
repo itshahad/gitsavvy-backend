@@ -7,11 +7,11 @@ from pgvector.sqlalchemy import Vector  # type: ignore
 
 
 class ChunkType(Enum):
+    FUNCTION_INNER_BLOCK = "function_inner_block"
     FUNCTION = "function"
     CLASS_SUMMARY = "class_summary"
     FILE_SUMMARY = "file_summary"
     TEXT = "text"
-    FUNCTION_INNER_BLOCK = "function_inner_block"
 
 
 # ====================================================================
