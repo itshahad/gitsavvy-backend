@@ -1,9 +1,26 @@
+from dataclasses import dataclass
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Enum as SqlEnum, UniqueConstraint
 from typing import List
 from enum import Enum
 from src.models import BaseModel
 from pgvector.sqlalchemy import Vector  # type: ignore
+from sqlalchemy.dialects.postgresql import JSONB
+
+
+class OutlineType(Enum):
+    Function = "function"
+    STMT = "statement"
+    CLASS = "class"
+
+
+@dataclass(frozen=True)
+class Outline:
+    start_byte: int
+    end_byte: int
+    content: str
+    type: OutlineType
 
 
 class ChunkType(Enum):
@@ -35,11 +52,16 @@ class Repository(BaseModel):
     files: Mapped[List["File"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )
+
     topics: Mapped[List["RepositoryTopic"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )
 
     chunks: Mapped[List["Chunk"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    modules: Mapped[List["Module"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )
 
@@ -50,17 +72,41 @@ class Repository(BaseModel):
 # --------------------------------------------------------------
 
 
+class Module(BaseModel):
+    __tablename__ = "module"
+
+    __table_args__ = (UniqueConstraint("repository_id", "path"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repository: Mapped["Repository"] = relationship(back_populates="modules")
+
+    path: Mapped[str]
+
+    files: Mapped[List["File"]] = relationship(
+        back_populates="module", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, path={self.path!r})"
+
+
+# --------------------------------------------------------------
+
+
 class File(BaseModel):
     __tablename__ = "file"
 
-    __table_args__ = (
-        UniqueConstraint("repository_id", "commit_sha", "file_path", name="uq_file"),
-    )
+    __table_args__ = (UniqueConstraint("repository_id", "file_path", name="uq_file"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
     repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
     repository: Mapped["Repository"] = relationship(back_populates="files")
+
+    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"), nullable=True)
+    module: Mapped["Module"] = relationship(back_populates="files")
 
     commit_sha: Mapped[str]
     file_path: Mapped[str]
@@ -84,7 +130,6 @@ class Chunk(BaseModel):
 
     file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))
     file: Mapped["File"] = relationship(back_populates="chunks")
-    file_path: Mapped[str]
 
     repo_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
     repository: Mapped["Repository"] = relationship(back_populates="chunks")
@@ -100,16 +145,18 @@ class Chunk(BaseModel):
     start_line: Mapped[int] = mapped_column(nullable=True)
     end_line: Mapped[int] = mapped_column(nullable=True)
     type: Mapped["ChunkType"] = mapped_column(SqlEnum(ChunkType))
-    content: Mapped[str]
-    # embedding_vector: Mapped[List[int]] = mapped_column(JSON, nullable=True)
-    content_hash: Mapped[str] = mapped_column(nullable=True)
+    content_text: Mapped[str]
+    content_json: Mapped[list[dict[str, int | str]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    content_text_hash: Mapped[str] = mapped_column(nullable=True)
 
     embedding: Mapped["ChunkEmbedding"] = relationship(
         back_populates="chunk", cascade="all, delete-orphan", uselist=False
     )
 
     def __repr__(self):
-        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_line={self.start_line!r}, end_line={self.end_line!r}, type={self.type!r}, content={self.content!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
+        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_line={self.start_line!r}, end_line={self.end_line!r}, type={self.type!r}, content_text={self.content_text!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
 
 
 # --------------------------------------------------------------

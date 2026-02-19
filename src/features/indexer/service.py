@@ -112,6 +112,7 @@ class RepoService:
         is_commit: bool = False,
     ):  # 200KB per file
         try:
+            modules: list[ModuleRead] = []
             selected_files: list[FileRead] = []
             extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
 
@@ -125,13 +126,25 @@ class RepoService:
                         and not is_binary(zip, info)
                         and is_selected(info.filename)
                     ):
+                        module_name = module_from_path(info.filename)
+                        module = self.get_or_create_module(
+                            repo_id=repo_id, module=module_name
+                        )
+                        if module is not None:
+                            modules.append(module)
                         zip.extract(info.filename, extract_dir)
-                        file = self.store_file_to_db(repo_id, commit_sha, zip, info)
+                        file = self.store_file_to_db(
+                            repo_id,
+                            commit_sha,
+                            zip,
+                            info,
+                            module.id if module else None,
+                        )
                         selected_files.append(file)
 
                 if is_commit:
                     self.db_session.commit()
-            return selected_files
+            return modules, selected_files
 
         except (BadZipFile, LargeZipFile) as e:
             raise ExternalServiceError(
@@ -143,14 +156,20 @@ class RepoService:
             raise StorageError(message=msg) from e
 
     def store_file_to_db(
-        self, repo_id: int, commit_sha: str, zip_file: ZipFile, info: ZipInfo
+        self,
+        repo_id: int,
+        commit_sha: str,
+        zip_file: ZipFile,
+        info: ZipInfo,
+        module_id: int | None,
     ):
         content_hash = hash_file_content(zip_file, info)
-        data: dict[str, str | int] = {
+        data: dict[str, str | int | None] = {
             "repository_id": repo_id,
             "commit_sha": commit_sha,
             "file_path": info.filename,
             "content_hash": content_hash,
+            "module_id": module_id,
         }
         try:
             file_data = FileCreate.model_validate(data)
@@ -171,6 +190,22 @@ class RepoService:
                 raise
             return FileRead.model_validate(file_from_db)
 
+    cashed_modules: dict[str, ModuleRead] = {}
+
+    def get_or_create_module(self, repo_id: int, module: str | None):
+        if module is None:
+            return None
+
+        if module not in self.cashed_modules:
+            data = ModuleCreate(repository_id=repo_id, path=module)
+            module_db = Module(**data.model_dump())
+            self.db_session.add(module_db)
+            self.db_session.flush()
+            self.db_session.refresh(module_db)
+            self.cashed_modules[module] = ModuleRead.model_validate(module_db)
+
+        return self.cashed_modules[module]
+
 
 # ==================================================================================================
 
@@ -190,10 +225,37 @@ class ChunkingService:
         self.repo_name = repo_name
         self.embedding_service = embedding_service
 
+    def create_chunk_embedding_text(
+        self,
+        chunk_type: ChunkType,
+        file: str,
+        code: str,
+        lang: str | None = None,
+        signature: str | None = None,
+        module: ModuleRead | None = None,
+    ):
+        language_line = f"\nLanguage: {lang}" if lang is not None else ""
+        signature_line = f"\nSignature: {signature}" if signature is not None else ""
+
+        content_line = ""
+        if chunk_type == ChunkType.FUNCTION:
+            content_line = f"\nCode:\n{code}"
+        elif chunk_type == ChunkType.TEXT:
+            content_line = f"\nContent:\n{code}"
+        else:
+            content_line = f"\nMembers:\n{code}"
+
+        text = f"""File:{normalize_repo_path(file)}{language_line}
+Type: {chunk_type.value}
+Context: {module.path if module else "root"}{signature_line}{content_line}
+"""
+        return text
+
     # files chunking:
     def chunk_text_files(
         self,
         file: FileRead,
+        module: ModuleRead | None = None,
         chunk_size: int = MAX_LINES_NUM,
         overlapping: int = OVERLAPPING_LINES_NUM,
         min_tail_lines: int = MIN_TAIL_LINES,
@@ -234,14 +296,20 @@ class ChunkingService:
                     raw_chunks.pop()
 
             for start_line, end_line, text in raw_chunks:
+                content = self.create_chunk_embedding_text(
+                    file=file.file_path,
+                    chunk_type=ChunkType.TEXT,
+                    module=module,
+                    code=text,
+                )
+
                 db_chunk = self.store_chunk_in_db(
                     file_id=file.id,
-                    file_path=file.file_path,
-                    type=ChunkType.TEXT.value,
+                    type=ChunkType.TEXT,
                     start_line=start_line,
                     end_line=end_line,
-                    content=text,
-                    content_hash=hash_text(text),
+                    content_text=content,
+                    content_text_hash=hash_text(content),
                 )
                 chunks.append(ChunkRead.model_validate(db_chunk))
             return chunks
@@ -250,86 +318,187 @@ class ChunkingService:
             raise StorageError(message=msg) from e
 
     # code files chunking ----------------------------------------------------------------
-    def build_file_summary(self, file: FileRead, src: bytes, root: Node, lang: str):
-        parts: list[str] = []
 
-        classes_and_methods: list[str] = []
+    def build_file_summary(
+        self,
+        file: FileRead,
+        src: bytes,
+        root: Node,
+        lang: str,
+        module: ModuleRead | None = None,
+    ):
+        parts: list[Outline] = []
+
         for child in root.named_children:
-            if is_class(child, lang=lang) or is_function(child, lang=lang):
-                classes_and_methods.append(node_signature(src, child))
+            node = unwrap_node(child, lang=lang) or child
+            if is_class(node, lang=lang):
+                outline = Outline(
+                    start_byte=node.start_byte,
+                    end_byte=node.end_byte,
+                    content=node_signature(src, node),
+                    type=OutlineType.CLASS,
+                )
+                parts.append(outline)
                 continue
 
-            wrapped_node = unwrap_node(child, lang=lang)
-            if wrapped_node:
-                classes_and_methods.append(node_signature(src, wrapped_node))
+            if is_function(node, lang=lang):
+                outline = Outline(
+                    start_byte=node.start_byte,
+                    end_byte=node.end_byte,
+                    content=node_signature(src, node),
+                    type=OutlineType.Function,
+                )
+                parts.append(outline)
                 continue
 
-            text = node_text(src, child)
+            text = node_text(src, node)
             if not text:
                 continue
-            parts.append(text)
 
-        if classes_and_methods:
-            parts.append(
-                "\nClasses/Methods in file:\n"
-                + "\n".join(f"{item}" for item in classes_and_methods).strip()
+            outline = Outline(
+                start_byte=node.start_byte,
+                end_byte=node.end_byte,
+                content=text,
+                type=OutlineType.STMT,
             )
+            parts.append(outline)
 
-        text = "\n".join(parts).strip()
+        code = "\n".join(o.content for o in parts).strip()
+
+        content = self.create_chunk_embedding_text(
+            file=file.file_path,
+            chunk_type=ChunkType.FILE_SUMMARY,
+            lang=lang,
+            module=module,
+            code=code,
+        )
 
         stored_chunk = self.store_chunk_in_db(
             file_id=file.id,
-            file_path=file.file_path,
-            type=ChunkType.FILE_SUMMARY.value,
-            content=text,
-            content_hash=hash_text(text),
+            type=ChunkType.FILE_SUMMARY,
+            content_json=[outline_to_dict(o) for o in parts],
+            content_text=content,
+            content_text_hash=hash_text(content),
         )
         return stored_chunk
 
-    def build_class_summary(self, src: bytes, node: Node, lang: str | None):
-        parts: list[str] = []
+    def build_class_summary(
+        self,
+        src: bytes,
+        file: FileRead,
+        node: Node,
+        lang: str | None = None,
+        module: ModuleRead | None = None,
+        chunk_parent_id: int | None = None,
+    ):
+        parts: list[Outline] = []
 
         body = find_body(node)
 
-        header = (
-            slice_text(src, node.start_byte, body.start_byte)
-            if body
-            else node_text(src, node)
-        )
-        parts.append(header.strip())
-
-        simple_contents: list[str] = []
-        classes_and_methods: list[str] = []
-
         if body:
+            header = slice_text(src, node.start_byte, body.start_byte)
+
             for child in body.named_children:
                 if child.type in SKIP_NODE_TYPES:
                     continue
 
-                if is_function(child, lang=lang) or is_class(child, lang=lang):
-                    classes_and_methods.append(node_signature(src, child))
+                node = unwrap_node(child, lang=lang) or child
+                if is_function(node, lang=lang):
+                    outline = Outline(
+                        start_byte=node.start_byte,
+                        end_byte=node.end_byte,
+                        content=node_signature(src, node),
+                        type=OutlineType.Function,
+                    )
+                    parts.append(outline)
                     continue
 
-                wrapped_function = unwrap_node(child, lang=lang)
-                if wrapped_function:
-                    classes_and_methods.append(node_signature(src, wrapped_function))
+                if is_class(node, lang=lang):
+                    outline = Outline(
+                        start_byte=node.start_byte,
+                        end_byte=node.end_byte,
+                        content=node_signature(src, node),
+                        type=OutlineType.CLASS,
+                    )
+                    parts.append(outline)
                     continue
 
                 # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
-                if not child.is_named and child.children:
+                if not node.is_named and node.children:
                     continue
 
-                content = node_text(src, child).strip()
-                simple_contents.append(content)
-        if simple_contents:
-            parts.append(
-                "\nMembers/Comments:\n" + "\n".join(f"{m}" for m in simple_contents)
+                content = node_text(src, node).strip()
+                outline = Outline(
+                    start_byte=node.start_byte,
+                    end_byte=node.end_byte,
+                    content=content,
+                    type=OutlineType.STMT,
+                )
+                parts.append(outline)
+
+            code = "\n".join(o.content for o in parts).strip()
+
+            content = self.create_chunk_embedding_text(
+                file=file.file_path,
+                chunk_type=ChunkType.CLASS_SUMMARY,
+                lang=lang,
+                signature=header,
+                module=module,
+                code=code,
             )
-        if classes_and_methods:
-            parts.append(
-                "\nMethods:\n" + "\n".join(f"{m}" for m in classes_and_methods)
+
+            stored_chunk = self.store_chunk_in_db(
+                file_id=file.id,
+                type=ChunkType.CLASS_SUMMARY,
+                content_json=[outline_to_dict(o) for o in parts],
+                content_text=content,
+                content_text_hash=hash_text(content),
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                chunk_parent_id=chunk_parent_id,
             )
-        return "\n".join(parts).strip()
+            return stored_chunk
+
+    def build_function_chunk(
+        self,
+        src: bytes,
+        file: FileRead,
+        node: Node,
+        lang: str | None = None,
+        module: ModuleRead | None = None,
+        chunk_parent_id: int | None = None,
+    ):
+        body = find_body(node)
+        fun = node_text(src, node)
+
+        content = self.create_chunk_embedding_text(
+            file=file.file_path,
+            chunk_type=ChunkType.FUNCTION,
+            lang=lang,
+            module=module,
+            code=fun,
+        )
+        if body:
+            header = slice_text(src, node.start_byte, body.start_byte)
+            content = self.create_chunk_embedding_text(
+                file=file.file_path,
+                chunk_type=ChunkType.FUNCTION,
+                lang=lang,
+                module=module,
+                code=fun,
+                signature=header,
+            )
+
+        db_chunk = self.store_chunk_in_db(
+            file_id=file.id,
+            type=ChunkType.FUNCTION,
+            start_line=node.start_point[0] + 1,
+            end_line=node.end_point[0] + 1,
+            content_text=content,
+            content_text_hash=hash_text(content),
+            chunk_parent_id=chunk_parent_id,
+        )
+        return db_chunk
 
     def visit_node(
         self,
@@ -339,47 +508,43 @@ class ChunkingService:
         chunks: list[ChunkRead],
         lang: str | None,
         chunk_parent_id: int | None = None,
+        module: ModuleRead | None = None,
     ):
         is_fn = is_function(node, lang=lang)
         is_cls = is_class(node, lang=lang)
 
         if is_fn:
-            text = node_text(src, node)
-            db_chunk = self.store_chunk_in_db(
-                file_id=file.id,
-                file_path=file.file_path,
-                type=ChunkType.FUNCTION.value,
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-                content=text,
-                content_hash=hash_text(text),
+            stored_chunk = self.build_function_chunk(
+                src=src,
+                node=node,
+                file=file,
+                lang=lang,
+                module=module,
                 chunk_parent_id=chunk_parent_id,
             )
-            chunks.append(ChunkRead.model_validate(db_chunk))
+            chunks.append(ChunkRead.model_validate(stored_chunk))
             return
         elif is_cls:
-            text = self.build_class_summary(src, node, lang)
-            db_chunk = self.store_chunk_in_db(
-                file_id=file.id,
-                file_path=file.file_path,
-                type=ChunkType.CLASS_SUMMARY.value,
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-                content=text,
-                content_hash=hash_text(text),
+            stored_chunk = self.build_class_summary(
+                src=src,
+                node=node,
+                file=file,
+                lang=lang,
+                module=module,
                 chunk_parent_id=chunk_parent_id,
             )
-            chunks.append(ChunkRead.model_validate(db_chunk))
-            for child in node.children:
-                self.visit_node(
-                    file=file,
-                    node=child,
-                    src=src,
-                    chunks=chunks,
-                    lang=lang,
-                    chunk_parent_id=db_chunk.id,
-                )
-            return
+            if stored_chunk is not None:
+                chunks.append(ChunkRead.model_validate(stored_chunk))
+                for child in node.children:
+                    self.visit_node(
+                        file=file,
+                        node=child,
+                        src=src,
+                        chunks=chunks,
+                        lang=lang,
+                        chunk_parent_id=stored_chunk.id,
+                    )
+                return
         for child in node.children:
             self.visit_node(
                 file=file,
@@ -392,7 +557,9 @@ class ChunkingService:
 
     # --------------------------------------------------------------------------------------------------
 
-    def chunk_code_files(self, file: FileRead) -> list[ChunkRead]:
+    def chunk_code_files(
+        self, file: FileRead, module: ModuleRead | None = None
+    ) -> list[ChunkRead]:
         chunks: list[ChunkRead] = []
 
         file_path = get_file_complete_path(file.file_path, self.repo_name)
@@ -408,17 +575,19 @@ class ChunkingService:
         tree = parser.parse(file_bytes)
         root = tree.root_node
 
-        db_file_chunk = self.build_file_summary(file, file_bytes, root, lang)
+        db_file_chunk = self.build_file_summary(
+            file, file_bytes, root, lang, module=module
+        )
         chunks.append(ChunkRead.model_validate(db_file_chunk))
         self.visit_node(
-            file,
-            root,
-            file_bytes,
-            chunks,
-            lang,
+            file=file,
+            node=root,
+            src=file_bytes,
+            chunks=chunks,
+            lang=lang,
             chunk_parent_id=db_file_chunk.id,
+            module=module,
         )
-
         return chunks
 
     # --------------------------------------------------------------------------------------------------
@@ -426,31 +595,26 @@ class ChunkingService:
     def store_chunk_in_db(
         self,
         file_id: int,
-        file_path: str,
-        type: str,
-        content: str,
-        content_hash: str,
+        type: ChunkType,
+        content_text: str,
+        content_text_hash: str,
+        content_json: list[dict[str, int | str]] | None = None,
         start_line: int | None = None,
         end_line: int | None = None,
         chunk_parent_id: int | None = None,
     ):
-        data: dict[str, int | str] = {
-            "repo_id": self.repo_id,
-            "file_id": file_id,
-            "file_path": file_path,
-            "type": type,
-            "content": content,
-            "content_hash": content_hash,
-        }
 
-        if start_line is not None and end_line is not None:
-            data["start_line"] = start_line
-            data["end_line"] = end_line
-
-        if chunk_parent_id is not None:
-            data["chunk_parent_id"] = chunk_parent_id
-
-        chunk_data = ChunkCreate.model_validate(data)
+        chunk_data = ChunkCreate(
+            file_id=file_id,
+            repo_id=self.repo_id,
+            chunk_parent_id=chunk_parent_id,
+            start_line=start_line,
+            end_line=end_line,
+            type=type,
+            content_text=content_text,
+            content_json=content_json,
+            content_text_hash=content_text_hash,
+        )
         chunk_db = Chunk(**chunk_data.model_dump())
         self.db_session.add(chunk_db)
         self.db_session.flush()
@@ -461,19 +625,21 @@ class ChunkingService:
         self, zip_file_path: Path, commit_sha: str, is_commit: bool = False
     ):
         chunks: list[ChunkRead] = []
-        selected_files = self.repo_service.select_repo_files(
+        modules, selected_files = self.repo_service.select_repo_files(
             self.repo_id, zip_file_path, self.repo_name, commit_sha
         )
-
         for file in selected_files:
+            module = None
+            if file.module_id is not None:
+                module = next((m for m in modules if m.id == file.module_id), None)
             e = ext(file.file_path)
 
             if e in AST_LANG_EXT:
                 print(f"AST_LANG_EXT -> {file.file_path}")
-                chunks.extend(self.chunk_code_files(file))
+                chunks.extend(self.chunk_code_files(file, module=module))
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file.file_path}")
-                chunks.extend(self.chunk_text_files(file))
+                chunks.extend(self.chunk_text_files(file, module=module))
         if is_commit:
             self.db_session.commit()
         return chunks
@@ -515,7 +681,7 @@ class EmbeddingService:
         embeddings: list[ChunkEmbeddingRead] = []
         for chunk in chunks:
             vec, _meta = embed_text(
-                text=chunk.content,
+                text=chunk.content_text,
                 tokenizer=tokenizer,
                 model=embedder,
                 batch_encoding=batch_encoding,

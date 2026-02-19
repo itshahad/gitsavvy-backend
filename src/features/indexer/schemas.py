@@ -52,8 +52,26 @@ class RepoRead(RepositoryMetadataModel):
 # ====================================================================
 
 
+class ModuleModel(BaseModel):
+    repository_id: int
+    path: str
+
+
+class ModuleCreate(ModuleModel):
+    pass
+
+
+class ModuleRead(ModuleModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ====================================================================
+
+
 class RepoFileModel(BaseModel):
     repository_id: int
+    module_id: int | None = None
     commit_sha: str
     file_path: str
     content_hash: str | None = None
@@ -79,16 +97,15 @@ class FileRead(RepoFileModel):
 class ChunkModel(BaseModel):
     file_id: int
     repo_id: int
-    file_path: str
     chunk_parent_id: int | None = None
     start_line: int | None = None
     end_line: int | None = None
     type: ChunkType
-    content: str
-    # embedding_vector: list[int] | None = None
-    content_hash: str | None = None
+    content_text: str
+    content_json: list[dict[str, int | str]] | None = None
+    content_text_hash: str | None = None
 
-    @field_validator("content_hash", mode="after")
+    @field_validator("content_text_hash", mode="after")
     @classmethod
     def validate_commit_content(cls, v: str) -> str:
         return validate_sha(v)

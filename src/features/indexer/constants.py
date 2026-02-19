@@ -33,21 +33,21 @@ SKIP_EXT = {
 }
 
 SKIP_DIR_MARKERS = {
-    "node_modules/",
-    "dist/",
-    "build/",
-    ".next/",
-    ".nuxt/",
-    ".git/",
-    ".idea/",
-    ".vscode/",
-    "coverage/",
-    ".venv/",
-    "venv/",
-    "__pycache__/",
-    ".pytest_cache/",
-    "vendor/",
-    "target/",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".git",
+    ".idea",
+    ".vscode",
+    "coverage",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "vendor",
+    "target",
 }
 
 IMPORTANT_FILES_EXACT = {
