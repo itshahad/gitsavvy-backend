@@ -71,7 +71,7 @@ class ModuleRead(ModuleModel):
 
 class RepoFileModel(BaseModel):
     repository_id: int
-    module_id: int | None = None
+    module_id: int
     commit_sha: str
     file_path: str
     content_hash: str | None = None
@@ -98,8 +98,8 @@ class ChunkModel(BaseModel):
     file_id: int
     repo_id: int
     chunk_parent_id: int | None = None
-    start_line: int | None = None
-    end_line: int | None = None
+    start_byte: int | None = None
+    end_byte: int | None = None
     type: ChunkType
     content_text: str
     content_json: list[dict[str, int | str]] | None = None

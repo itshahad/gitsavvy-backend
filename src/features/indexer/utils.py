@@ -23,7 +23,7 @@ def normalize_repo_path(zip_entry: str) -> str:
 def module_from_path(path: str):
     # zipfile/parent_dir/file.ext
     parent = PurePosixPath(path).parent
-    if parent.parent == PurePosixPath("."):  # zipfile was the direct parent for file
+    if parent == PurePosixPath("."):
         return None
     return str(parent)
 
@@ -152,9 +152,9 @@ def unwrap_node(wrapper: Node, lang: str | None = None):
         if inner and (is_function(inner, lang=lang) or is_class(inner, lang=lang)):
             return inner
 
-    for child in wrapper.named_children:
-        if is_function(child, lang=lang) or is_class(child, lang=lang):
-            return child
+    # for child in wrapper.named_children:
+    #     if is_function(child, lang=lang) or is_class(child, lang=lang):
+    #         return child
     return None
 
 
@@ -206,7 +206,7 @@ def outline_to_dict(outline: Outline):
     data: dict[str, int | str] = {
         "start_byte": outline.start_byte,
         "end_byte": outline.end_byte,
-        # "content": outline.content,
+        "content": outline.content,
         "type": outline.type.value,
     }
 

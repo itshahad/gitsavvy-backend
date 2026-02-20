@@ -2,11 +2,14 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Enum as SqlEnum, UniqueConstraint
-from typing import List
+from typing import TYPE_CHECKING, List
 from enum import Enum
 from src.models import BaseModel
 from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy.dialects.postgresql import JSONB
+
+if TYPE_CHECKING:
+    from src.features.documentation_generator.models import Documentation
 
 
 class OutlineType(Enum):
@@ -105,7 +108,7 @@ class File(BaseModel):
     repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
     repository: Mapped["Repository"] = relationship(back_populates="files")
 
-    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"), nullable=True)
+    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))
     module: Mapped["Module"] = relationship(back_populates="files")
 
     commit_sha: Mapped[str]
@@ -142,8 +145,8 @@ class Chunk(BaseModel):
         back_populates="chunk_parent", cascade="all, delete-orphan"
     )
 
-    start_line: Mapped[int] = mapped_column(nullable=True)
-    end_line: Mapped[int] = mapped_column(nullable=True)
+    start_byte: Mapped[int] = mapped_column(nullable=True)
+    end_byte: Mapped[int] = mapped_column(nullable=True)
     type: Mapped["ChunkType"] = mapped_column(SqlEnum(ChunkType))
     content_text: Mapped[str]
     content_json: Mapped[list[dict[str, int | str]]] = mapped_column(
@@ -155,8 +158,12 @@ class Chunk(BaseModel):
         back_populates="chunk", cascade="all, delete-orphan", uselist=False
     )
 
+    documentation: Mapped["Documentation"] = relationship(
+        back_populates="chunk", cascade="all, delete-orphan", uselist=False
+    )
+
     def __repr__(self):
-        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_line={self.start_line!r}, end_line={self.end_line!r}, type={self.type!r}, content_text={self.content_text!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
+        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_byte={self.start_byte!r}, end_byte={self.end_byte!r}, type={self.type!r}, content_text={self.content_text!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
 
 
 # --------------------------------------------------------------

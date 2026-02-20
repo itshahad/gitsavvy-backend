@@ -230,9 +230,9 @@ class ChunkingService:
         chunk_type: ChunkType,
         file: str,
         code: str,
+        module: ModuleRead,
         lang: str | None = None,
         signature: str | None = None,
-        module: ModuleRead | None = None,
     ):
         language_line = f"\nLanguage: {lang}" if lang is not None else ""
         signature_line = f"\nSignature: {signature}" if signature is not None else ""
@@ -247,7 +247,7 @@ class ChunkingService:
 
         text = f"""File:{normalize_repo_path(file)}{language_line}
 Type: {chunk_type.value}
-Context: {module.path if module else "root"}{signature_line}{content_line}
+Context: {module.path}{signature_line}{content_line}
 """
         return text
 
@@ -255,47 +255,46 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
     def chunk_text_files(
         self,
         file: FileRead,
-        module: ModuleRead | None = None,
-        chunk_size: int = MAX_LINES_NUM,
-        overlapping: int = OVERLAPPING_LINES_NUM,
-        min_tail_lines: int = MIN_TAIL_LINES,
-    ):
+        module: ModuleRead,
+        src: bytes,
+        chunk_size: int = 12_000,
+        overlapping: int = 2_000,
+        min_tail: int = 2_000,
+    ) -> list[ChunkRead]:
         try:
             if overlapping >= chunk_size:
                 raise ValueError("overlapping value must be less than chunk_size")
 
             chunks: list[ChunkRead] = []
-            file_path = get_file_complete_path(file.file_path, self.repo_name)
-
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()
-
             step = chunk_size - overlapping
 
-            raw_chunks: list[tuple[int, int, str]] = []
+            raw_chunks: list[tuple[int, int, bytes]] = []
 
-            for i in range(0, len(lines), step):
+            n = len(src)
+            for i in range(0, n, step):
                 start = i
-                end = min(i + chunk_size, len(lines))
-                chunk = lines[i:end]
-                text = "\n".join(chunk).strip()
-                if text:
-                    raw_chunks.append((start, end, text))
+                end = min(i + chunk_size, n)
 
+                blob = src[start:end]
+                text = blob.decode("utf-8", errors="replace").strip()
+                if text:
+                    raw_chunks.append((start, end, blob))
+
+            # merge small tail
             if len(raw_chunks) >= 2:
-                tail_start, tail_end, tail_text = raw_chunks[-1]
-                tail_lines = tail_end - tail_start
-                if tail_lines <= min_tail_lines:
-                    prev_start, _, prev_text = raw_chunks[-2]
-                    new_text = prev_text + "\n" + tail_text
-                    raw_chunks[-2] = (
-                        prev_start,
-                        tail_end,
-                        new_text.strip(),
-                    )
+                tail_start, tail_end, tail_blob = raw_chunks[-1]
+                tail_size = tail_end - tail_start
+                if tail_size <= min_tail:
+                    prev_start, _, prev_blob = raw_chunks[-2]
+                    new_blob = prev_blob + tail_blob
+                    raw_chunks[-2] = (prev_start, tail_end, new_blob)
                     raw_chunks.pop()
 
-            for start_line, end_line, text in raw_chunks:
+            for start_b, end_b, blob in raw_chunks:
+                text = blob.decode("utf-8", errors="replace").strip()
+                if not text:
+                    continue
+
                 content = self.create_chunk_embedding_text(
                     file=file.file_path,
                     chunk_type=ChunkType.TEXT,
@@ -306,26 +305,88 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                 db_chunk = self.store_chunk_in_db(
                     file_id=file.id,
                     type=ChunkType.TEXT,
-                    start_line=start_line,
-                    end_line=end_line,
+                    start_byte=start_b,
+                    end_byte=end_b,
                     content_text=content,
                     content_text_hash=hash_text(content),
                 )
                 chunks.append(ChunkRead.model_validate(db_chunk))
+
             return chunks
+
         except (PermissionError, FileNotFoundError, OSError) as e:
             msg = str(e) or "Storage read failed"
             raise StorageError(message=msg) from e
 
+    # def chunk_text_files(
+    #     self,
+    #     file: FileRead,
+    #     module: ModuleRead,
+    #     chunk_size: int = MAX_LINES_NUM,
+    #     overlapping: int = OVERLAPPING_LINES_NUM,
+    #     min_tail_lines: int = MIN_TAIL_LINES,
+    # ):
+    #     try:
+    #         if overlapping >= chunk_size:
+    #             raise ValueError("overlapping value must be less than chunk_size")
+
+    #         chunks: list[ChunkRead] = []
+    #         file_path = get_file_complete_path(file.file_path, self.repo_name)
+
+    #         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    #             lines = f.readlines()
+
+    #         step = chunk_size - overlapping
+
+    #         raw_chunks: list[tuple[int, int, str]] = []
+
+    #         for i in range(0, len(lines), step):
+    #             start = i
+    #             end = min(i + chunk_size, len(lines))
+    #             chunk = lines[i:end]
+    #             text = "\n".join(chunk).strip()
+    #             if text:
+    #                 raw_chunks.append((start, end, text))
+
+    #         if len(raw_chunks) >= 2:
+    #             tail_start, tail_end, tail_text = raw_chunks[-1]
+    #             tail_lines = tail_end - tail_start
+    #             if tail_lines <= min_tail_lines:
+    #                 prev_start, _, prev_text = raw_chunks[-2]
+    #                 new_text = prev_text + "\n" + tail_text
+    #                 raw_chunks[-2] = (
+    #                     prev_start,
+    #                     tail_end,
+    #                     new_text.strip(),
+    #                 )
+    #                 raw_chunks.pop()
+
+    #         for start_line, end_line, text in raw_chunks:
+    #             content = self.create_chunk_embedding_text(
+    #                 file=file.file_path,
+    #                 chunk_type=ChunkType.TEXT,
+    #                 module=module,
+    #                 code=text,
+    #             )
+
+    #             db_chunk = self.store_chunk_in_db(
+    #                 file_id=file.id,
+    #                 type=ChunkType.TEXT,
+    #                 start_line=start_line,
+    #                 end_line=end_line,
+    #                 content_text=content,
+    #                 content_text_hash=hash_text(content),
+    #             )
+    #             chunks.append(ChunkRead.model_validate(db_chunk))
+    #         return chunks
+    #     except (PermissionError, FileNotFoundError, OSError) as e:
+    #         msg = str(e) or "Storage read failed"
+    #         raise StorageError(message=msg) from e
+
     # code files chunking ----------------------------------------------------------------
 
     def build_file_summary(
-        self,
-        file: FileRead,
-        src: bytes,
-        root: Node,
-        lang: str,
-        module: ModuleRead | None = None,
+        self, file: FileRead, src: bytes, root: Node, lang: str, module: ModuleRead
     ):
         parts: list[Outline] = []
 
@@ -338,6 +399,7 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                     content=node_signature(src, node),
                     type=OutlineType.CLASS,
                 )
+
                 parts.append(outline)
                 continue
 
@@ -352,6 +414,7 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                 continue
 
             text = node_text(src, node)
+
             if not text:
                 continue
 
@@ -387,50 +450,51 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         src: bytes,
         file: FileRead,
         node: Node,
+        module: ModuleRead,
         lang: str | None = None,
-        module: ModuleRead | None = None,
         chunk_parent_id: int | None = None,
     ):
+        class_node = node
         parts: list[Outline] = []
 
-        body = find_body(node)
+        body = find_body(class_node)
 
         if body:
-            header = slice_text(src, node.start_byte, body.start_byte)
+            header = slice_text(src, class_node.start_byte, body.start_byte)
 
             for child in body.named_children:
                 if child.type in SKIP_NODE_TYPES:
                     continue
 
-                node = unwrap_node(child, lang=lang) or child
-                if is_function(node, lang=lang):
+                child_node = unwrap_node(child, lang=lang) or child
+                if is_function(child_node, lang=lang):
                     outline = Outline(
-                        start_byte=node.start_byte,
-                        end_byte=node.end_byte,
-                        content=node_signature(src, node),
+                        start_byte=child_node.start_byte,
+                        end_byte=child_node.end_byte,
+                        content=node_signature(src, child_node),
                         type=OutlineType.Function,
                     )
                     parts.append(outline)
                     continue
 
-                if is_class(node, lang=lang):
+                if is_class(child_node, lang=lang):
                     outline = Outline(
-                        start_byte=node.start_byte,
-                        end_byte=node.end_byte,
-                        content=node_signature(src, node),
+                        start_byte=child_node.start_byte,
+                        end_byte=child_node.end_byte,
+                        content=node_signature(src, child_node),
                         type=OutlineType.CLASS,
                     )
                     parts.append(outline)
                     continue
 
                 # if this node is just a wrapper and has children, don't treat it as a class member itself let recursion handle its children
-                if not node.is_named and node.children:
+                if not child_node.is_named and child_node.children:
                     continue
 
-                content = node_text(src, node).strip()
+                content = node_text(src, child_node).strip()
                 outline = Outline(
-                    start_byte=node.start_byte,
-                    end_byte=node.end_byte,
+                    start_byte=child_node.start_byte,
+                    end_byte=child_node.end_byte,
                     content=content,
                     type=OutlineType.STMT,
                 )
@@ -453,8 +517,8 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                 content_json=[outline_to_dict(o) for o in parts],
                 content_text=content,
                 content_text_hash=hash_text(content),
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
+                start_byte=class_node.start_byte,
+                end_byte=class_node.end_byte,
                 chunk_parent_id=chunk_parent_id,
             )
             return stored_chunk
@@ -464,12 +528,19 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         src: bytes,
         file: FileRead,
         node: Node,
+        module: ModuleRead,
         lang: str | None = None,
-        module: ModuleRead | None = None,
         chunk_parent_id: int | None = None,
     ):
         body = find_body(node)
         fun = node_text(src, node)
+
+        outline = Outline(
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            content=node_signature(src, node),
+            type=OutlineType.Function,
+        )
 
         content = self.create_chunk_embedding_text(
             file=file.file_path,
@@ -492,10 +563,11 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         db_chunk = self.store_chunk_in_db(
             file_id=file.id,
             type=ChunkType.FUNCTION,
-            start_line=node.start_point[0] + 1,
-            end_line=node.end_point[0] + 1,
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
             content_text=content,
             content_text_hash=hash_text(content),
+            content_json=[outline_to_dict(outline)],
             chunk_parent_id=chunk_parent_id,
         )
         return db_chunk
@@ -506,9 +578,9 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         node: Node,
         src: bytes,
         chunks: list[ChunkRead],
+        module: ModuleRead,
         lang: str | None,
         chunk_parent_id: int | None = None,
-        module: ModuleRead | None = None,
     ):
         is_fn = is_function(node, lang=lang)
         is_cls = is_class(node, lang=lang)
@@ -542,6 +614,7 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                         src=src,
                         chunks=chunks,
                         lang=lang,
+                        module=module,
                         chunk_parent_id=stored_chunk.id,
                     )
                 return
@@ -552,37 +625,34 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
                 src=src,
                 chunks=chunks,
                 lang=lang,
+                module=module,
                 chunk_parent_id=chunk_parent_id,
             )
 
     # --------------------------------------------------------------------------------------------------
 
     def chunk_code_files(
-        self, file: FileRead, module: ModuleRead | None = None
+        self, file_path: str, src: bytes, file: FileRead, module: ModuleRead
     ) -> list[ChunkRead]:
         chunks: list[ChunkRead] = []
 
-        file_path = get_file_complete_path(file.file_path, self.repo_name)
         file_ext = ext(file_path)
         lang = lang_from_ext(file_ext)
 
         if lang is None:
             return []
 
-        file_bytes = Path(file_path).read_bytes()
         parser = get_parser(language_name=lang)
 
-        tree = parser.parse(file_bytes)
+        tree = parser.parse(src)
         root = tree.root_node
 
-        db_file_chunk = self.build_file_summary(
-            file, file_bytes, root, lang, module=module
-        )
+        db_file_chunk = self.build_file_summary(file, src, root, lang, module=module)
         chunks.append(ChunkRead.model_validate(db_file_chunk))
         self.visit_node(
             file=file,
             node=root,
-            src=file_bytes,
+            src=src,
             chunks=chunks,
             lang=lang,
             chunk_parent_id=db_file_chunk.id,
@@ -599,8 +669,8 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         content_text: str,
         content_text_hash: str,
         content_json: list[dict[str, int | str]] | None = None,
-        start_line: int | None = None,
-        end_line: int | None = None,
+        start_byte: int | None = None,
+        end_byte: int | None = None,
         chunk_parent_id: int | None = None,
     ):
 
@@ -608,8 +678,8 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
             file_id=file_id,
             repo_id=self.repo_id,
             chunk_parent_id=chunk_parent_id,
-            start_line=start_line,
-            end_line=end_line,
+            start_byte=start_byte,
+            end_byte=end_byte,
             type=type,
             content_text=content_text,
             content_json=content_json,
@@ -628,18 +698,30 @@ Context: {module.path if module else "root"}{signature_line}{content_line}
         modules, selected_files = self.repo_service.select_repo_files(
             self.repo_id, zip_file_path, self.repo_name, commit_sha
         )
+        modules_by_id = {m.id: m for m in modules}
+
         for file in selected_files:
-            module = None
-            if file.module_id is not None:
-                module = next((m for m in modules if m.id == file.module_id), None)
+            module = modules_by_id.get(file.module_id)
+            if module is None:
+                raise ValueError(f"No module found for this file {file.file_path}")
+
+            file_path = get_file_complete_path(file.file_path, self.repo_name)
+            file_bytes = Path(file_path).read_bytes()
+
             e = ext(file.file_path)
 
             if e in AST_LANG_EXT:
                 print(f"AST_LANG_EXT -> {file.file_path}")
-                chunks.extend(self.chunk_code_files(file, module=module))
+                chunks.extend(
+                    self.chunk_code_files(
+                        file=file, file_path=file_path, src=file_bytes, module=module
+                    )
+                )
             elif e in TEXT_LANG_EXT:
                 print(f"TEXT_LANG_EXT -> {file.file_path}")
-                chunks.extend(self.chunk_text_files(file, module=module))
+                chunks.extend(
+                    self.chunk_text_files(file, src=file_bytes, module=module)
+                )
         if is_commit:
             self.db_session.commit()
         return chunks
