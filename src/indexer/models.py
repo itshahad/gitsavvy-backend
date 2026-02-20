@@ -2,6 +2,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Enum as SqlEnum, JSON
 from typing import List
 from enum import Enum
+from database import Base 
 
 class ChunkType(Enum):
     FUNCTION = "function"
@@ -9,8 +10,8 @@ class ChunkType(Enum):
     FILE_SUMMARY = "file_summary"
     TEXT = "text"
 
-class Base(DeclarativeBase):
-    pass
+# class Base(DeclarativeBase):
+#     pass
 
 class Repository(Base):
     __tablename__ = "repository"

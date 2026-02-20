@@ -25,7 +25,7 @@ from .exceptions import RepoNotFoundError
 
 router = APIRouter()
 
-@router.get("/")
+@router.get("/test-indexer")
 def test(session: Session = Depends(get_db)):
     try:
         indx=IndexerService()
