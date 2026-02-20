@@ -78,183 +78,53 @@
 
 
 
-# import os
-# from fastapi import APIRouter, HTTPException, Depends
-# from fastapi.responses import RedirectResponse
-# from sqlalchemy.orm import Session
-
-# from database import get_db
-# from authentication.services import login_with_github_code
-# from authentication.dependencies import get_current_user
-# from authentication.schemas import UserRead
-# from authentication.models import User
-
-# router = APIRouter(prefix="/auth/github")
-
-
-# @router.get("/login")
-# def github_login():
-#     client_id = os.getenv("GITHUB_CLIENT_ID")
-#     redirect_uri = os.getenv("GITHUB_REDIRECT_URI")
-#     scope = "read:user"
-
-#     if not client_id or not redirect_uri:
-#         raise HTTPException(status_code=500, detail="Missing GitHub OAuth env vars")
-
-#     url = (
-#         "https://github.com/login/oauth/authorize"
-#         f"?client_id={client_id}"
-#         f"&redirect_uri={redirect_uri}"
-#         f"&scope={scope}"
-#     )
-#     return RedirectResponse(url)
-
-
-# @router.get("/callback")
-# def github_callback(code: str, db: Session = Depends(get_db)):
-#     if not code:
-#         raise HTTPException(status_code=400, detail="Missing code")
-
-#     try:
-#         return login_with_github_code(db=db, code=code)
-#     except ValueError as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-#     except Exception:
-#         raise HTTPException(status_code=500, detail="GitHub login failed")
-
-
-# @router.get("/me")
-# def me(current_user: User = Depends(get_current_user)):
-#     return current_user
-
-
-# from fastapi import APIRouter, Depends
-# from sqlalchemy.orm import Session
-
-# from database import get_db
-# from authentication.dependencies import get_current_claims
-# from authentication.services import get_or_create_user
-# from authentication.schemas import UserRead
-
-# router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-# @router.get("/me", response_model=UserRead)
-# def me(
-#     claims: dict = Depends(get_current_claims),
-#     db: Session = Depends(get_db),
-# ):
-#     return get_or_create_user(db, claims)
-
-# from fastapi import APIRouter, Depends
-# from sqlalchemy.orm import Session
-
-# from database import get_db
-# from authentication.dependencies import get_current_claims
-# from authentication.services import get_or_create_user
-# from authentication.schemas import UserRead
-
-# router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-# @router.get("/me", response_model=UserRead)
-# def me(
-#     claims: dict = Depends(get_current_claims),
-#     db: Session = Depends(get_db),
-# ):
-#     """
-#     Endpoint إنتاجي:
-#     - يتأكد من توكن Auth0
-#     - ينشئ/يحدّث المستخدم في قاعدة البيانات
-#     - يرجع بيانات المستخدم للواجهة (React لاحقاً)
-#     """
-#     return get_or_create_user(db, claims)
-
 import os
-import urllib.parse
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from authentication.dependencies import get_current_claims
+from authentication.services import login_with_github_code
+from authentication.dependencies import get_current_user
 from authentication.schemas import UserRead
-from authentication.services import (
-    exchange_code_for_tokens,
-    get_userinfo,
-    get_or_create_user,
-)
+from authentication.models import User
 
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
-AUTH0_CALLBACK_URL = os.getenv("AUTH0_CALLBACK_URL")
-
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth/github")
 
 
 @router.get("/login")
-def login():
-    """
-    Backend-only login start:
-    Redirects user to Auth0, forcing GitHub connection.
-    """
-    if not all([AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CALLBACK_URL, AUTH0_AUDIENCE]):
-        raise HTTPException(status_code=500, detail="Missing AUTH0 env vars")
+def github_login():
+    client_id = os.getenv("GITHUB_CLIENT_ID")
+    redirect_uri = os.getenv("GITHUB_REDIRECT_URI")
+    scope = "read:user"
 
-    params = {
-        "response_type": "code",
-        "client_id": AUTH0_CLIENT_ID,
-        "redirect_uri": AUTH0_CALLBACK_URL,
-        "scope": "openid profile email",
-        "audience": AUTH0_AUDIENCE,
-        "connection": "github",  # force GitHub only
-    }
-    url = f"https://{AUTH0_DOMAIN}/authorize?{urllib.parse.urlencode(params)}"
+    if not client_id or not redirect_uri:
+        raise HTTPException(status_code=500, detail="Missing GitHub OAuth env vars")
+
+    url = (
+        "https://github.com/login/oauth/authorize"
+        f"?client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope={scope}"
+    )
     return RedirectResponse(url)
 
 
-@router.get("/callback", response_class=HTMLResponse)
-def callback(code: str, db: Session = Depends(get_db)):
-    """
-    Receives Auth0 code, exchanges it for tokens, fetches userinfo,
-    then creates/updates user in DB (your existing user table).
-    """
-    tokens = exchange_code_for_tokens(code)
-    access_token = tokens.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="No access_token returned from Auth0")
+@router.get("/callback")
+def github_callback(code: str, db: Session = Depends(get_db)):
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code")
 
-    claims = get_userinfo(access_token)
-    user = get_or_create_user(db, claims)
-
-    # Simple success page (no frontend needed)
-    # (Do NOT show tokens in production. This is just for your testing.)
-    return f"""
-    <html>
-      <body style="font-family:Arial; padding:24px;">
-        <h2>✅ Login success (GitHub via Auth0)</h2>
-        <p><b>User saved in DB:</b></p>
-        <ul>
-          <li>id: {user.id}</li>
-          <li>github_id: {user.github_id}</li>
-          <li>username: {user.username}</li>
-          <li>name: {user.name}</li>
-        </ul>
-        <p>Now you can check your database table <code>user</code>.</p>
-        <p>Later, when you build React, it will call <code>/auth/me</code> with Bearer token.</p>
-      </body>
-    </html>
-    """
+    try:
+        return login_with_github_code(db=db, code=code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="GitHub login failed")
 
 
-@router.get("/me", response_model=UserRead)
-def me(
-    claims: dict = Depends(get_current_claims),
-    db: Session = Depends(get_db),
-):
-    """
-    Production endpoint for later frontend:
-    Requires Authorization: Bearer <access_token>
-    """
-    return get_or_create_user(db, claims)
+@router.get("/me")
+def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
