@@ -16,6 +16,7 @@ class OutlineType(Enum):
     Function = "function"
     STMT = "statement"
     CLASS = "class"
+    SIGN = "sign"
 
 
 @dataclass(frozen=True)

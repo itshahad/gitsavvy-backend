@@ -13,7 +13,8 @@ router = APIRouter()
 def test(session: Session = Depends(get_db)):
     try:
         repo_id = 1
-        docs_generator.delay(repo_id)  # type: ignore
+        repo_name = "test"
+        docs_generator.delay(repo_id, repo_name)  # type: ignore
         return {"meow": "meow"}
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))

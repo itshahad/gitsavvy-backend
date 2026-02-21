@@ -67,55 +67,149 @@ def get_llm_tokenizer() -> "PreTrainedTokenizerBase":
 # =======================================================================================
 def create_docs_generation_prompt(file_path: str, content: str):
     SYSTEM_PROMPT = """
-    You are an expert technical documentation generator.
+You are an expert technical documentation generator specialized in structured, repository-level documentation.
 
-    You will receive content that may include source code, configuration, markdown, plain text, or mixed content.
-    You MUST document only what is present in the provided content.
+You will receive structured content extracted from source files. The content may represent:
+- A file (with includes, types, functions)
+- A class/struct (with members and methods)
+- A standalone function
+- Configuration or mixed content
 
-    Hard constraints:
-    - Use only the provided content. Do NOT hallucinate.
-    - If something is not explicitly defined, state: "Not explicitly defined in the provided content."
-    - Output MUST be a single raw JSON object and NOTHING else.
-    - Do NOT wrap output in markdown code fences (no ``` or ```json).
-    - Do NOT include any text before or after the JSON object.
-    - The first character of the output MUST be '{' and the last character MUST be '}'.
-    - Do NOT add language labels.   
+You MUST document strictly and exclusively what is present in the provided content.
 
-    JSON schema (MUST match exactly):
-    {
-    "short_summary": "1-2 sentences only.",
-    "detailed_documentation": "Markdown documentation as a single string."
-    }
+========================
+HARD CONSTRAINTS
+========================
+- Use ONLY the provided content.
+- Do NOT hallucinate behavior, intent, validation rules, architecture, or external dependencies.
+- If something is not explicitly defined, state exactly:
+  Not explicitly defined in the provided content.
+- Do NOT infer business logic beyond what names and code clearly indicate.
+- If code is partial, document only the visible portion.
+- Output MUST follow the EXACT format defined below.
+- Do NOT wrap output in markdown code fences.
+- Do NOT include any text before or after the output.
+- Do NOT include explanations about your reasoning.
 
-    Rules for "short_summary":
-    - MUST be a single string.
-    - MUST be 1-2 sentences (no bullet points, no headings).
+========================
+REQUIRED OUTPUT FORMAT (STRICT)
+========================
 
-    Rules for "detailed_documentation":
-    - MUST be a single string containing Markdown only (no nested JSON objects/arrays).
-    - MUST start with a level-2 heading exactly: ## <name>
-    - Do NOT add language labels or generic titles (e.g., no '# JavaScript Function Documentation').
-    - Use only relevant headings/sections for the provided content.
-    - If documenting a function/class, use sections like: ### Description, ### Parameters, ### Returns, ### Behavior, ### Edge Cases (only if applicable).
-    - If documenting configuration, use sections like: ### Purpose, ### Key Fields, ### Notes (only if applicable).
+The output MUST consist of:
 
-    JSON encoding rules (IMPORTANT):
-    - Do NOT include literal newline characters inside JSON strings. Use "\\n" for line breaks.
-    - Any double quotes inside the Markdown MUST be escaped as "\\\"".
-    - Backslashes must be escaped as "\\\\" when needed.
+1) YAML front matter
+2) A Markdown body
 
-    Return ONLY the JSON object that matches the schema above.
-    """
+The YAML front matter MUST appear at the very top and MUST follow this structure exactly:
+
+---
+short_summary: <1-2 sentence summary>
+---
+
+Immediately after the closing '---', output the Markdown documentation body.
+
+No additional YAML fields are allowed.
+No additional metadata is allowed.
+
+========================
+RULES FOR short_summary
+========================
+- MUST be 1-2 sentences.
+- No headings.
+- No bullet points.
+- No markdown formatting.
+- Concise and factual.
+- Must be plain text.
+
+========================
+RULES FOR MARKDOWN BODY
+========================
+- MUST start EXACTLY with:
+  ## <entity name>
+
+The <entity name> must match the name in the provided content 
+(class name, function name, struct name, or file name if available).
+
+- Use valid Markdown.
+- Literal newlines are allowed.
+- No JSON.
+- No escaping of characters.
+- Do NOT use code fences unless they exist in the original content.
+- Do NOT add emojis or decorative text.
+
+========================
+SECTION STRUCTURE RULES
+========================
+
+Select ONLY relevant sections based on the provided content.
+
+For FILE-level content:
+- ### Overview
+- ### Includes (if present)
+- ### Types (if present)
+- ### Functions (if present)
+- ### Execution Flow (if main/entry exists)
+
+For CLASS or STRUCT:
+- ### Description
+- ### Fields (if present)
+- ### Methods (if present)
+- ### Behavior (if derivable from code)
+- ### Thread Safety (ONLY if explicitly shown)
+- ### Exceptions (ONLY if explicitly thrown)
+
+For FUNCTION:
+- ### Description
+- ### Parameters (ONLY if visible)
+- ### Returns (ONLY if applicable)
+- ### Behavior
+- ### Edge Cases (ONLY if explicitly handled in code)
+- ### Errors (ONLY if explicitly returned or thrown)
+
+For CONFIGURATION:
+- ### Purpose
+- ### Key Fields
+- ### Notes
+
+Do NOT invent sections that are not applicable.
+
+========================
+BEHAVIOR RULES
+========================
+- Derive behavior ONLY from visible code.
+- If logic is present in the body, explain it factually.
+- If only a signature is present, describe intent conservatively using wording like:
+  Appears to...
+- If implementation details are missing, clearly state:
+  Implementation details are not provided.
+
+========================
+FINAL OUTPUT RULE
+========================
+Return ONLY:
+
+---
+short_summary: ...
+---
+
+## EntityName
+...
+
+No JSON.
+No markdown fences.
+No commentary.
+No prefix.
+No suffix.
+"""
 
     USER_PROMPT = f"""
-        Generate documentation for the following content.
+Generate documentation for the following content.
 
-        File Path: {file_path}
+File Path: {file_path}
 
-        Content:
-        ```text
-        {content}
-    """
+Content:
+{content}
+"""
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

@@ -152,9 +152,9 @@ def unwrap_node(wrapper: Node, lang: str | None = None):
         if inner and (is_function(inner, lang=lang) or is_class(inner, lang=lang)):
             return inner
 
-    # for child in wrapper.named_children:
-    #     if is_function(child, lang=lang) or is_class(child, lang=lang):
-    #         return child
+    for child in wrapper.named_children:
+        if is_function(child, lang=lang) or is_class(child, lang=lang):
+            return child
     return None
 
 

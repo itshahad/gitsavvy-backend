@@ -461,6 +461,13 @@ Context: {module.path}{signature_line}{content_line}
 
         if body:
             header = slice_text(src, class_node.start_byte, body.start_byte)
+            outline = Outline(
+                start_byte=0,
+                end_byte=0,
+                content=header,
+                type=OutlineType.SIGN,
+            )
+            parts.append(outline)
 
             for child in body.named_children:
                 if child.type in SKIP_NODE_TYPES:
