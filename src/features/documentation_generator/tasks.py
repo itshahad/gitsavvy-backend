@@ -17,7 +17,14 @@ class DocGeneratorResult(TypedDict):
 
 
 @worker.task(bind=True)  # type: ignore
-def docs_generator(self: Task, repo_id: int, repo_name: str) -> DocGeneratorResult:
+def docs_generator(
+    self: Task,
+    repo_id: int,
+    repo_name: str,
+    start_from_module: int | None = None,
+    start_from_file: int | None = None,
+    start_from_chunk: int | None = None,
+) -> DocGeneratorResult:
     db_session = SessionLocal()
     http = requests.session()
 
@@ -35,11 +42,14 @@ def docs_generator(self: Task, repo_id: int, repo_name: str) -> DocGeneratorResu
         repo_id=repo_id,
         repo_name=repo_name,
         llm_service=llm_service,
+        start_from_module_id=start_from_module,
+        start_from_file_id=start_from_file,
+        start_from_chunk_id=start_from_chunk,
     )
 
     try:
         files_doc = doc_generate_service.generate_docs()
-        db_session.commit()
+        # db_session.commit()
 
         return {"status": "ok", "repo_id": repo_id, "files_len": len(files_doc)}
     except Exception:

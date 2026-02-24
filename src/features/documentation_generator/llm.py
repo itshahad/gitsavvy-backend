@@ -1,9 +1,13 @@
 # type: ignore [all]
 from typing import Any
+
 from src.config import LLM_MODEL_NAME, HF_HOME
 import threading
 
 from typing import TYPE_CHECKING
+
+from src.features.documentation_generator.constants import SYSTEM_PROMPT
+from src.features.documentation_generator.utils import split_huge_chunk
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase, PreTrainedModel
@@ -40,7 +44,7 @@ def get_llm_model() -> "PreTrainedModel":
                 cache_dir=HF_HOME,
                 low_cpu_mem_usage=True,
                 torch_dtype=dtype,
-                device_map="auto" if device == "cuda" else None,
+                device_map={"": 0} if device == "cuda" else None,
                 quantization_config=bnb_config,
             )
             _MODEL.eval()
@@ -65,143 +69,12 @@ def get_llm_tokenizer() -> "PreTrainedTokenizerBase":
 
 
 # =======================================================================================
-def create_docs_generation_prompt(file_path: str, content: str):
-    SYSTEM_PROMPT = """
-You are an expert technical documentation generator specialized in structured, repository-level documentation.
-
-You will receive structured content extracted from source files. The content may represent:
-- A file (with includes, types, functions)
-- A class/struct (with members and methods)
-- A standalone function
-- Configuration or mixed content
-
-You MUST document strictly and exclusively what is present in the provided content.
-
-========================
-HARD CONSTRAINTS
-========================
-- Use ONLY the provided content.
-- Do NOT hallucinate behavior, intent, validation rules, architecture, or external dependencies.
-- If something is not explicitly defined, state exactly:
-  Not explicitly defined in the provided content.
-- Do NOT infer business logic beyond what names and code clearly indicate.
-- If code is partial, document only the visible portion.
-- Output MUST follow the EXACT format defined below.
-- Do NOT wrap output in markdown code fences.
-- Do NOT include any text before or after the output.
-- Do NOT include explanations about your reasoning.
-
-========================
-REQUIRED OUTPUT FORMAT (STRICT)
-========================
-
-The output MUST consist of:
-
-1) YAML front matter
-2) A Markdown body
-
-The YAML front matter MUST appear at the very top and MUST follow this structure exactly:
-
----
-short_summary: <1-2 sentence summary>
----
-
-Immediately after the closing '---', output the Markdown documentation body.
-
-No additional YAML fields are allowed.
-No additional metadata is allowed.
-
-========================
-RULES FOR short_summary
-========================
-- MUST be 1-2 sentences.
-- No headings.
-- No bullet points.
-- No markdown formatting.
-- Concise and factual.
-- Must be plain text.
-
-========================
-RULES FOR MARKDOWN BODY
-========================
-- MUST start EXACTLY with:
-  ## <entity name>
-
-The <entity name> must match the name in the provided content 
-(class name, function name, struct name, or file name if available).
-
-- Use valid Markdown.
-- Literal newlines are allowed.
-- No JSON.
-- No escaping of characters.
-- Do NOT use code fences unless they exist in the original content.
-- Do NOT add emojis or decorative text.
-
-========================
-SECTION STRUCTURE RULES
-========================
-
-Select ONLY relevant sections based on the provided content.
-
-For FILE-level content:
-- ### Overview
-- ### Includes (if present)
-- ### Types (if present)
-- ### Functions (if present)
-- ### Execution Flow (if main/entry exists)
-
-For CLASS or STRUCT:
-- ### Description
-- ### Fields (if present)
-- ### Methods (if present)
-- ### Behavior (if derivable from code)
-- ### Thread Safety (ONLY if explicitly shown)
-- ### Exceptions (ONLY if explicitly thrown)
-
-For FUNCTION:
-- ### Description
-- ### Parameters (ONLY if visible)
-- ### Returns (ONLY if applicable)
-- ### Behavior
-- ### Edge Cases (ONLY if explicitly handled in code)
-- ### Errors (ONLY if explicitly returned or thrown)
-
-For CONFIGURATION:
-- ### Purpose
-- ### Key Fields
-- ### Notes
-
-Do NOT invent sections that are not applicable.
-
-========================
-BEHAVIOR RULES
-========================
-- Derive behavior ONLY from visible code.
-- If logic is present in the body, explain it factually.
-- If only a signature is present, describe intent conservatively using wording like:
-  Appears to...
-- If implementation details are missing, clearly state:
-  Implementation details are not provided.
-
-========================
-FINAL OUTPUT RULE
-========================
-Return ONLY:
-
----
-short_summary: ...
----
-
-## EntityName
-...
-
-No JSON.
-No markdown fences.
-No commentary.
-No prefix.
-No suffix.
-"""
-
+def create_docs_generation_prompt(
+    file_path: str,
+    content: str | None = None,
+    sys_prompt: str | None = None,
+    usr_prompt: str | None = None,
+):
     USER_PROMPT = f"""
 Generate documentation for the following content.
 
@@ -212,8 +85,8 @@ Content:
 """
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": USER_PROMPT},
+        {"role": "system", "content": sys_prompt if sys_prompt else SYSTEM_PROMPT},
+        {"role": "user", "content": usr_prompt if usr_prompt else USER_PROMPT},
     ]
 
     return messages
@@ -225,26 +98,30 @@ MAX_INPUT_TOKENS = CONTEXT_LIMIT - RESERVED_OUTPUT
 
 
 def safe_prompt(tokenizer, text, max_tokens=MAX_INPUT_TOKENS):
-    tokens = tokenizer.encode(text)
-    if len(tokens) > max_tokens:
-        raise ValueError("input is too big")
-    return len(tokens)
+    tokens = tokenizer(text, add_special_tokens=False).input_ids
+    return len(tokens) <= max_tokens
 
 
-def create_model_input(messages, tokenizer, model):
+def apply_chat_template(messages, tokenizer):
     text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
-    safe_prompt(tokenizer=tokenizer, text=text)
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    return text
+
+
+def create_model_input(text, tokenizer, model):
+    model_inputs = tokenizer(text, return_tensors="pt").to(model.device)
     return model_inputs
 
 
-def generate_text(model_inputs, model):
-    generated_ids = model.generate(**model_inputs, max_new_tokens=512)
+def generate_text(model_inputs, model, max_new_tokens: int = 512):
+    import torch
+
+    with torch.inference_mode():
+        generated_ids = model.generate(**model_inputs, max_new_tokens=max_new_tokens)
     generated_ids = [
-        output_ids[len(input_ids) :]
-        for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+        out_ids[in_ids.shape[-1] :]
+        for in_ids, out_ids in zip(model_inputs["input_ids"], generated_ids)
     ]
     return generated_ids
 

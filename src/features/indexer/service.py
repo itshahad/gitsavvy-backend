@@ -15,9 +15,9 @@ from sqlalchemy import select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 from src.config import (
-    MAX_LINES_NUM,
-    MIN_TAIL_LINES,
-    OVERLAPPING_LINES_NUM,
+    MAX_BYTES_NUM,
+    MIN_TAIL_BYTES,
+    OVERLAPPING_BYTES_NUM,
 )
 
 
@@ -257,9 +257,9 @@ Context: {module.path}{signature_line}{content_line}
         file: FileRead,
         module: ModuleRead,
         src: bytes,
-        chunk_size: int = 12_000,
-        overlapping: int = 2_000,
-        min_tail: int = 2_000,
+        chunk_size: int = MAX_BYTES_NUM,
+        overlapping: int = OVERLAPPING_BYTES_NUM,
+        min_tail: int = MIN_TAIL_BYTES,
     ) -> list[ChunkRead]:
         try:
             if overlapping >= chunk_size:
@@ -317,73 +317,6 @@ Context: {module.path}{signature_line}{content_line}
         except (PermissionError, FileNotFoundError, OSError) as e:
             msg = str(e) or "Storage read failed"
             raise StorageError(message=msg) from e
-
-    # def chunk_text_files(
-    #     self,
-    #     file: FileRead,
-    #     module: ModuleRead,
-    #     chunk_size: int = MAX_LINES_NUM,
-    #     overlapping: int = OVERLAPPING_LINES_NUM,
-    #     min_tail_lines: int = MIN_TAIL_LINES,
-    # ):
-    #     try:
-    #         if overlapping >= chunk_size:
-    #             raise ValueError("overlapping value must be less than chunk_size")
-
-    #         chunks: list[ChunkRead] = []
-    #         file_path = get_file_complete_path(file.file_path, self.repo_name)
-
-    #         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-    #             lines = f.readlines()
-
-    #         step = chunk_size - overlapping
-
-    #         raw_chunks: list[tuple[int, int, str]] = []
-
-    #         for i in range(0, len(lines), step):
-    #             start = i
-    #             end = min(i + chunk_size, len(lines))
-    #             chunk = lines[i:end]
-    #             text = "\n".join(chunk).strip()
-    #             if text:
-    #                 raw_chunks.append((start, end, text))
-
-    #         if len(raw_chunks) >= 2:
-    #             tail_start, tail_end, tail_text = raw_chunks[-1]
-    #             tail_lines = tail_end - tail_start
-    #             if tail_lines <= min_tail_lines:
-    #                 prev_start, _, prev_text = raw_chunks[-2]
-    #                 new_text = prev_text + "\n" + tail_text
-    #                 raw_chunks[-2] = (
-    #                     prev_start,
-    #                     tail_end,
-    #                     new_text.strip(),
-    #                 )
-    #                 raw_chunks.pop()
-
-    #         for start_line, end_line, text in raw_chunks:
-    #             content = self.create_chunk_embedding_text(
-    #                 file=file.file_path,
-    #                 chunk_type=ChunkType.TEXT,
-    #                 module=module,
-    #                 code=text,
-    #             )
-
-    #             db_chunk = self.store_chunk_in_db(
-    #                 file_id=file.id,
-    #                 type=ChunkType.TEXT,
-    #                 start_line=start_line,
-    #                 end_line=end_line,
-    #                 content_text=content,
-    #                 content_text_hash=hash_text(content),
-    #             )
-    #             chunks.append(ChunkRead.model_validate(db_chunk))
-    #         return chunks
-    #     except (PermissionError, FileNotFoundError, OSError) as e:
-    #         msg = str(e) or "Storage read failed"
-    #         raise StorageError(message=msg) from e
-
-    # code files chunking ----------------------------------------------------------------
 
     def build_file_summary(
         self, file: FileRead, src: bytes, root: Node, lang: str, module: ModuleRead

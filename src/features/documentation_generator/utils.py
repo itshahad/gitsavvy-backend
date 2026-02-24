@@ -16,3 +16,28 @@ def parse_yaml_front_matter(text: str):
             short_summary = line.split(":", 1)[1].strip()
 
     return short_summary, markdown_body
+
+
+def split_huge_chunk(chunk_content: str, max_bytes: int = 6_000) -> list[str]:
+    lines = chunk_content.splitlines(keepends=True)
+
+    texts: list[str] = []
+    text = ""
+    text_bytes = 0
+
+    for line in lines:
+        line_bytes = len(line.encode("utf-8"))
+
+        if text_bytes + line_bytes <= max_bytes:
+            text += line
+            text_bytes += line_bytes
+            continue
+        else:
+            if text:
+                texts.append(text)
+            text = line
+            text_bytes = line_bytes
+
+    if text:
+        texts.append(text)
+    return texts

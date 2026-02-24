@@ -12,9 +12,18 @@ router = APIRouter()
 @router.get("/docs-gen")
 def test(session: Session = Depends(get_db)):
     try:
-        repo_id = 1
-        repo_name = "test"
-        docs_generator.delay(repo_id, repo_name)  # type: ignore
+        repo_id = 2
+        repo_name = "fastapi"
+        start_from_module = 607
+        start_from_file_id = 4609
+        start_from_chunk_id = 11590
+        docs_generator.delay(  # type: ignore
+            repo_id=repo_id,
+            repo_name=repo_name,
+            start_from_module=start_from_module,
+            start_from_file=start_from_file_id,
+            start_from_chunk=start_from_chunk_id,
+        )
         return {"meow": "meow"}
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
