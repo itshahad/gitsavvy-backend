@@ -1,7 +1,6 @@
 from typing import TypedDict
 from celery import Task  # type: ignore
 import requests
-from src.config import MAX_LINES_NUM
 from src.features.indexer.embedder import get_embedder_model, get_tokenizer
 from src.features.indexer.service import ChunkingService, EmbeddingService, RepoService
 
@@ -27,8 +26,6 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
 
     embedder = get_embedder_model()
     tokenizer = get_tokenizer()
-
-    print(MAX_LINES_NUM)
 
     repo_service = RepoService(
         db_session=db_session, http_session=http, repo_name=repo_name

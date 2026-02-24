@@ -1,14 +1,31 @@
 import os
 import hashlib
 from zipfile import ZipFile, ZipInfo
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from src.features.indexer.constants import *
 from tree_sitter import Node
 from sqlalchemy.orm import Session
 from typing import TypeVar
 from sqlalchemy.sql import Select
+from src.models_loader import Outline
 
 T = TypeVar("T")
+
+
+def normalize_repo_path(zip_entry: str) -> str:
+    p = PurePosixPath(zip_entry)
+    if len(p.parts) > 1:
+        p = PurePosixPath(*p.parts[1:])
+
+    return str(p)
+
+
+def module_from_path(path: str):
+    # zipfile/parent_dir/file.ext
+    parent = PurePosixPath(path).parent
+    if parent == PurePosixPath("."):
+        return None
+    return str(parent)
 
 
 def normalize_newlines(s: str) -> str:
@@ -40,8 +57,8 @@ def is_skipped(file_path: str) -> bool:
     p = norm(file_path)
     if p.endswith("/"):
         return True
-    if any(marker in p for marker in SKIP_DIR_MARKERS):
-        return True
+    # if any(marker in p for marker in SKIP_DIR_MARKERS):
+    #     return True
     if ext(p) in SKIP_EXT:
         return True
     return False
@@ -183,3 +200,14 @@ def dict_to_text(d: dict[str, str]) -> str:
 def get_item_from_db(session: Session, stmt: Select[tuple[T]]) -> T | None:
     result = session.execute(stmt).first()
     return result[0] if result else None
+
+
+def outline_to_dict(outline: Outline):
+    data: dict[str, int | str] = {
+        "start_byte": outline.start_byte,
+        "end_byte": outline.end_byte,
+        "content": outline.content,
+        "type": outline.type.value,
+    }
+
+    return data
