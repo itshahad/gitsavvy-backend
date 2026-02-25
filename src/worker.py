@@ -29,6 +29,7 @@ def make_celery(include_task: bool):
             [
                 "src.features.indexer",
                 "src.features.documentation_generator",
+                "src.features.chatbot",
             ]
         )
 

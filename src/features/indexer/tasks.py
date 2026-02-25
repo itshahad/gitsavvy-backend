@@ -69,9 +69,7 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
             commit_sha=commit_sha,
         )
 
-        embeddings = embedding_service.embed_chunks(
-            chunks=chunks, tokenizer=tokenizer, embedder=embedder
-        )
+        embeddings = embedding_service.embed_chunks(chunks=chunks)
 
         db_session.commit()
 
