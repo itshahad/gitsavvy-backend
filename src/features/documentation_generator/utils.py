@@ -18,7 +18,7 @@ def parse_yaml_front_matter(text: str):
     return short_summary, markdown_body
 
 
-def split_huge_chunk(chunk_content: str, max_bytes: int = 6_000) -> list[str]:
+def split_huge_text(chunk_content: str, max_bytes: int = 6_000) -> list[str]:
     lines = chunk_content.splitlines(keepends=True)
 
     texts: list[str] = []
