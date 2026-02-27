@@ -7,7 +7,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from src.features.documentation_generator.constants import SYSTEM_PROMPT
-from src.features.documentation_generator.utils import split_huge_chunk
+from src.features.documentation_generator.utils import split_huge_text
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase, PreTrainedModel
@@ -69,9 +69,9 @@ def get_llm_tokenizer() -> "PreTrainedTokenizerBase":
 
 
 # =======================================================================================
-def create_docs_generation_prompt(
-    file_path: str,
+def create_prompt(
     content: str | None = None,
+    file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
 ):
@@ -129,3 +129,77 @@ def generate_text(model_inputs, model, max_new_tokens: int = 512):
 def decode_generated_text(generated_ids, tokenizer):
     response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     return response
+
+
+def generate_llm_response(
+    tokenizer: Any,
+    model: Any,
+    content: str | None = None,
+    file_path: str | None = None,
+    sys_prompt: str | None = None,
+    usr_prompt: str | None = None,
+) -> str:
+    prompt = create_prompt(
+        file_path=file_path,
+        content=content,
+        usr_prompt=usr_prompt,
+        sys_prompt=sys_prompt,
+    )
+    full_text = apply_chat_template(messages=prompt, tokenizer=tokenizer)
+    print(f"full_text {full_text}")
+
+    if safe_prompt(tokenizer=tokenizer, text=full_text):
+        model_inputs = create_model_input(
+            text=full_text, tokenizer=tokenizer, model=model
+        )
+        gen_ids = generate_text(
+            model=model, model_inputs=model_inputs, max_new_tokens=512
+        )
+        return decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
+
+    parts = split_huge_text(content)
+    partial_summaries: list[str] = []
+
+    for part in parts:
+        part_prompt = create_prompt(file_path=file_path, content=part)
+        part_text = apply_chat_template(messages=part_prompt, tokenizer=tokenizer)
+        print(f"part_text {part_text}")
+
+        if not safe_prompt(tokenizer, part_text):
+            subparts = split_huge_text(part, max_bytes=3_000)
+            for sp in subparts:
+                sp_prompt = create_prompt(file_path=file_path, content=sp)
+                sp_text = apply_chat_template(messages=sp_prompt, tokenizer=tokenizer)
+                if not safe_prompt(tokenizer=tokenizer, text=sp_text):
+                    sp_ids = tokenizer(
+                        sp_text,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=MAX_INPUT_TOKENS,
+                    ).to(model.device)
+                    gen_ids = generate_text(
+                        model=model,
+                        model_inputs=sp_ids,
+                        max_new_tokens=256,
+                    )
+                else:
+                    sp_inputs = create_model_input(sp_text, tokenizer, model)
+                    gen_ids = generate_text(
+                        model=model,
+                        model_inputs=sp_inputs,
+                        max_new_tokens=256,
+                    )
+                partial_summaries.append(
+                    decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
+                )
+            continue
+
+        part_inputs = create_model_input(
+            text=part_text, tokenizer=tokenizer, model=model
+        )
+        gen_ids = generate_text(
+            model=model, model_inputs=part_inputs, max_new_tokens=256
+        )
+        partial_summaries.append(
+            decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
+        )

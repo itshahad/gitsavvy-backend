@@ -2,22 +2,33 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
+from src.features.chatbot.constants import SYS_PROMPT_CHATBOT
 
+from src.features.documentation_generator.llm import generate_llm_response
 from src.features.indexer.models import Chunk, ChunkEmbedding
 from src.features.indexer.tasks import EmbeddingService
 
 
 class ChatbotService:
     def __init__(
-        self, db_session: Session, embedding_service: EmbeddingService
+        self,
+        db_session: Session,
+        embedder: Any,
+        embedding_tokenizer: Any,
+        repo_id: int,
+        llm_model: Any,
+        llm_tokenizer: Any,
+        k: int = 8,
     ) -> None:
+        self.llm_model = llm_model
+        self.llm_tokenizer = llm_tokenizer
+        self.repo_id = repo_id
+        self.k = k
         self.db_session = db_session
-        self.embedding_service = embedding_service
+        self.embedding_service = EmbeddingService(
+            db_session=db_session, embedder=embedder, tokenizer=embedding_tokenizer
+        )
 
     def embed_query(self, query: str):
         vec, meta = self.embedding_service.embed_text(text=query)
@@ -45,89 +56,40 @@ class ChatbotService:
         rows = self.db_session.execute(stmt).all()
         return rows
 
+    def get_relevant_documents(self, query: str):
+        query_embedding = self.embed_query(query)
 
-class ChunkRetriever(BaseRetriever):
-    def __init__(
-        self,
-        *,
-        db_session: Session,
-        repo_id: int,
-        embedder: Any,
-        tokenizer: Any,
-        llm: Any,
-        k: int = 8,
-    ) -> None:
-        super().__init__()
-        self.db_session = db_session
-        self.embedding_service = EmbeddingService(
-            db_session=db_session, embedder=embedder, tokenizer=tokenizer
-        )
-        self.chatbot_service = ChatbotService(
-            db_session=db_session, embedding_service=self.embedding_service
-        )
-        self.repo_id = repo_id
-        self.llm = llm
-        self.k = k
-
-    def _get_relevant_documents(self, query: str, *, run_manager=None):  # type: ignore
-        query_embedding = self.chatbot_service.embed_query(query)
-
-        rows = self.chatbot_service.vector_search_chunks(
+        rows = self.vector_search_chunks(
             repo_id=self.repo_id, query_embedding=query_embedding, k=self.k
         )
 
         chunks: list[Chunk] = [row[0] for row in rows]
 
-        docs: list[Document] = []
-        for chunk in chunks:
-            docs.append(
-                Document(
-                    page_content=chunk.content_text,
-                    metadata={
-                        "chunk_id": chunk.id,
-                        "repo_id": chunk.repo_id,
-                        "parent_id": chunk.chunk_parent_id,
-                        "file_id": chunk.file_id,
-                        "type": chunk.type,
-                    },
-                )
-            )
-        return docs
+        return chunks
 
-    def format_docs(self, docs: list[Document]):
+    def format_context(self, chunks: list[Chunk]):
         chunks_set: set[int] = set()
         parts: list[str] = []
-        for doc in docs:
-            chunk_id = doc.metadata.get("chunk_id")  # type: ignore
-            if chunk_id in chunks_set:
+        for chunk in chunks:
+            if chunk.id in chunks_set:
                 continue
-            chunks_set.add(chunk_id)  # type: ignore
-            header = f"[{doc.metadata.get('type')} {doc.metadata.get('file_id')} #{chunk_id}]"  # type: ignore
-            parts.append(header + "\n" + doc.page_content)
+            chunks_set.add(chunk.id)
+            header = f"[{chunk.type} {chunk.file_id} #{chunk.id}]"
+            parts.append(header + "\n" + chunk.content_text)
         return "\n\n---\n\n".join(parts)
 
-    def run_chain(self, query: str):
-        prompt = ChatPromptTemplate.from_messages(  # type: ignore
-            [
-                (
-                    "system",
-                    "You are a GitSavvy repository assistant. "
-                    "Answer ONLY using the provided context. "
-                    "If the context doesn't contain the answer, say you don't know and suggest what to search next.",
-                ),
-                ("human", "Question: {question}\n\nContext:\n{context}"),
-            ]
+    def run_chatbot(self, query: str):
+        chunks = self.get_relevant_documents(query=query)
+
+        context = self.format_context(chunks=chunks)
+
+        USER_PROMPT = f"Question: {query}\n\nContext:\n{context}"
+
+        res = generate_llm_response(
+            model=self.llm_model,
+            tokenizer=self.llm_tokenizer,
+            sys_prompt=SYS_PROMPT_CHATBOT,
+            usr_prompt=USER_PROMPT,
         )
 
-        format_docs_runnable = RunnableLambda(self.format_docs)
-
-        rag_chain = (
-            {
-                "context": self | format_docs_runnable,
-                "question": RunnablePassthrough(),
-            }
-            | prompt
-            | self.llm
-        )
-
-        return rag_chain.invoke(query)
+        return res
