@@ -7,32 +7,37 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.exceptions import DatabaseError
 from src.features.documentation_generator.exceptions import RepoNotFound
-from src.features.documentation_generator.service import DocsService
+from src.features.documentation_generator.service import (
+    DocService,
+    FileNotFound,
+    ModuleNotFound,
+)
 from src.features.documentation_generator.tasks import docs_generator
+from src.models_loader import ChunkType
 from src.pagination import cursor_pagination_params
 
 
 router = APIRouter(prefix="/documentation")
 
 
-@router.get("/generate")
-def test(session: Session = Depends(get_db)):
-    try:
-        repo_id = 2
-        repo_name = "fastapi"
-        # start_from_module = 607
-        # start_from_file_id = 4609
-        # start_from_chunk_id = 11590
-        docs_generator.delay(  # type: ignore
-            repo_id=repo_id,
-            repo_name=repo_name,
-            # start_from_module=start_from_module,
-            # start_from_file=start_from_file_id,
-            # start_from_chunk=start_from_chunk_id,
-        )
-        return {"meow": "meow"}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+# @router.get("/generate")
+# def test(session: Session = Depends(get_db)):
+#     try:
+#         repo_id = 2
+#         repo_name = "fastapi"
+#         # start_from_module = 607
+#         # start_from_file_id = 4609
+#         # start_from_chunk_id = 11590
+#         docs_generator.delay(  # type: ignore
+#             repo_id=repo_id,
+#             repo_name=repo_name,
+#             # start_from_module=start_from_module,
+#             # start_from_file=start_from_file_id,
+#             # start_from_chunk=start_from_chunk_id,
+#         )
+#         return {"meow": "meow"}
+#     except Exception as e:
+#         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{repo_id}/modules")
@@ -41,16 +46,66 @@ def get_repo_modules(
     session: Session = Depends(get_db),
     pagination: dict[str, int | None] = Depends(cursor_pagination_params),
 ):
-    docs_service = DocsService(db=session)
+    docs_service = DocService(db=session)
 
     try:
-        modules = docs_service.get_modules(
-            repo_id=repo_id, limit=pagination["limit"], cursor=pagination["cursor"]
+        limit = pagination["limit"]
+        cursor = pagination["cursor"]
+        modules, next_cursor = docs_service.get_modules(
+            repo_id=repo_id, limit=limit if limit else 20, cursor=cursor
         )
-        next_cursor = modules[-1].id if modules else None
         result: dict[str, Any] = {"data": modules, "next_cursor": next_cursor}
         return result
     except RepoNotFound as e:
         raise HTTPException(status_code=404, detail="Repository not found") from e
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/modules/{module_id}/files")
+def get_module_file(
+    repo_id: int,
+    module_id: int,
+    session: Session = Depends(get_db),
+    pagination: dict[str, int | None] = Depends(cursor_pagination_params),
+):
+    docs_service = DocService(db=session)
+
+    try:
+        limit = pagination["limit"]
+        cursor = pagination["cursor"]
+        files, next_cursor = docs_service.get_files(
+            module_id=module_id, limit=limit if limit else 20, cursor=cursor
+        )
+        result: dict[str, Any] = {"data": files, "next_cursor": next_cursor}
+        return result
+    except ModuleNotFound as e:
+        raise HTTPException(status_code=404, detail="Module not found") from e
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/modules/{module_id}/files/{file_id}/docs")
+def get_file_docs(
+    repo_id: int,
+    module_id: int,
+    file_id: int,
+    session: Session = Depends(get_db),
+    pagination: dict[str, int | None] = Depends(cursor_pagination_params),
+):
+    docs_service = DocService(db=session)
+
+    try:
+        limit = pagination["limit"]
+        cursor = pagination["cursor"]
+        files, next_cursor = docs_service.get_chunk_documentation(
+            file_id=file_id,
+            limit=limit if limit else 20,
+            cursor=cursor,
+        )
+        result: dict[str, Any] = {"data": files, "next_cursor": next_cursor}
+        return result
+    except FileNotFound as e:
+        raise HTTPException(status_code=404, detail="File not found") from e
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e

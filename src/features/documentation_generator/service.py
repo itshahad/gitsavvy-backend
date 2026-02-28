@@ -1,20 +1,24 @@
 from typing import Any, Generator
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.exceptions import DatabaseError
-from src.features.documentation_generator.exceptions import RepoNotFound
+from src.features.documentation_generator.exceptions import (
+    FileNotFound,
+    ModuleNotFound,
+    RepoNotFound,
+)
 from src.features.documentation_generator.llm import generate_llm_response  # type: ignore
 
 from src.features.documentation_generator.models import Documentation
-from src.features.documentation_generator.schemas import DocCreate
+from src.features.documentation_generator.schemas import DocChunkRead, DocCreate
 from src.features.documentation_generator.schemas import DocRead
 from src.features.documentation_generator.utils import parse_yaml_front_matter
 from src.features.indexer.models import Chunk, Module, ChunkType, File
 from src.features.indexer.constants import AST_LANG_EXT
 from src.features.indexer.router import FileRead, Path, get_file_complete_path
-from src.features.indexer.schemas import ModuleRead, RepoRead
+from src.features.indexer.schemas import ChunkRead, ModuleRead, RepoRead
 from src.features.indexer.service import normalize_repo_path
 from src.models_loader import OutlineType, Repository
 
@@ -252,7 +256,7 @@ class DocGenerateService:
         return DocRead.model_validate(doc_db)
 
 
-class DocsService:
+class DocService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -262,19 +266,108 @@ class DocsService:
             raise RepoNotFound(repo_id=repo_id)
         return RepoRead.model_validate(repo)
 
-    def get_modules(
-        self, repo_id: int, limit: int | None = 20, cursor: int | None = None
-    ):
+    def get_module(self, module_id: int):
+        module = self.db.get(Module, module_id)
+        if module is None:
+            raise ModuleNotFound(module_id=module_id)
+        return ModuleRead.model_validate(module)
+
+    def get_file(self, file_id: int):
+        file = self.db.get(File, file_id)
+        if file is None:
+            raise FileNotFound(file_id=file_id)
+        return FileRead.model_validate(file)
+
+    def get_modules(self, repo_id: int, limit: int = 20, cursor: int | None = None):
         try:
             self.get_repo(repo_id=repo_id)
             filters = [Module.repository_id == repo_id]
-            if cursor:
+            if cursor is not None:
                 filters.append(Module.id > cursor)
-            stmt = select(Module).where(*filters).order_by(Module.id).limit(limit)
+            stmt = select(Module).where(*filters).order_by(Module.id).limit(limit + 1)
 
             modules = self.db.execute(stmt).scalars().all()
 
-            return [ModuleRead.model_validate(module) for module in modules]
+            has_more = len(modules) > limit
+            next_cursor = None
+
+            if has_more:
+                next_cursor = modules[-1].id
+                modules = modules[:limit]
+
+            return (
+                [ModuleRead.model_validate(module) for module in modules],
+                next_cursor,
+            )
+        except SQLAlchemyError as e:
+            raise DatabaseError from e
+
+    def get_files(self, module_id: int, limit: int = 20, cursor: int | None = None):
+        try:
+            self.get_module(module_id=module_id)
+            filters = [File.module_id == module_id]
+            if cursor is not None:
+                filters.append(File.id > cursor)
+            stmt = select(File).where(*filters).order_by(File.id).limit(limit + 1)
+
+            files = self.db.execute(stmt).scalars().all()
+
+            has_more = len(files) > limit
+            next_cursor = None
+
+            if has_more:
+                next_cursor = files[-1].id
+                files = files[:limit]
+
+            return ([FileRead.model_validate(file) for file in files], next_cursor)
+        except SQLAlchemyError as e:
+            raise DatabaseError from e
+
+    def get_chunk_documentation(
+        self,
+        file_id: int,
+        # chunk_type: ChunkType,
+        limit: int = 20,
+        cursor: int | None = None,
+    ):
+        try:
+            self.get_file(file_id=file_id)
+            order_case = case(
+                (Chunk.type == ChunkType.FILE_SUMMARY, 0),
+                (Chunk.type == ChunkType.CLASS_SUMMARY, 1),
+                (Chunk.type == ChunkType.FUNCTION, 2),
+                else_=99,
+            )
+            filters = [Chunk.file_id == file_id]
+            if cursor is not None:
+                filters.append(Chunk.id > cursor)
+            stmt = (
+                select(Chunk, Documentation)
+                .join(Documentation, Documentation.chunk_id == Chunk.id)
+                .where(*filters)
+                .order_by(order_case, Chunk.start_byte)
+                .limit(limit + 1)
+            )
+
+            rows = self.db.execute(stmt).all()
+
+            has_more = len(rows) > limit
+            next_cursor = None
+
+            if has_more:
+                next_cursor = rows[-1][0].id  # each row is (chunk, documentation)
+                rows = rows[:limit]
+
+            docs: list[DocChunkRead] = []
+            for chunk, doc in rows:
+                chunk_model = ChunkRead.model_validate(chunk)
+                doc_model = DocRead.model_validate(doc)
+
+                doc_chunk = DocChunkRead(**doc_model.model_dump(), chunk=chunk_model)
+                docs.append(doc_chunk)
+
+            return (docs, next_cursor)
+
         except SQLAlchemyError as e:
             raise DatabaseError from e
 
