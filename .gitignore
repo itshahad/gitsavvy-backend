@@ -210,6 +210,7 @@ __marimo__/
 
 #downloaded files
 repos/
+.hf/
 
 serviceAccountKey.json
 *.firebase-adminsdk*.json

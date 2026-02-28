@@ -1,20 +1,26 @@
-#root of the project, which inits the FastAPI app
-from dotenv import load_dotenv
-load_dotenv()
 from fastapi import FastAPI
-from database import engine, Base
-# from indexer.models import *
-# from indexer.router import router
-from authentication.models import User
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from sqlalchemy import text
+from src.database import engine, Base
+
+# must imported:
+from src.worker import worker  # type: ignore
+from src.models_loader import *
+
+# routers:
+from src.features.indexer.router import router as indexer_router
+from src.features.documentation_generator.router import router as docs_router
 from authentication.router import router as auth_router
 
 
-
 app = FastAPI()
-app.include_router(auth_router)
-# app.include_router(router=router)
+app.include_router(router=auth_router)
+app.include_router(router=indexer_router)
+app.include_router(router=docs_router)
+# with engine.begin() as conn:
+#     conn.execute(text("DROP TABLE IF EXISTS documentation CASCADE"))
 # Base.metadata.drop_all(engine)
-Base.metadata.create_all(bind=engine)
-@app.get("/")
-def root():
-    return {"status": "ok", "docs": "/docs"}
+Base.metadata.create_all(engine)

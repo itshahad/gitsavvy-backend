@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:0.8.1-pg17-trixie
     container_name: gitsavvy_postgres
     environment:
       POSTGRES_USER: ${DB_USERNAME}
@@ -15,26 +15,67 @@ services:
 
   api:
     build:
-      context: ./src
+      context: .
+      dockerfile: docker/api.Dockerfile
     container_name: gitsavvy_fastapi
     volumes:
-      - ./src:/usr/src/app
+      - ./src:/usr/src/app/src
     environment:
+      PYTHONPATH: /usr/src/app
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
       FIREBASE_CREDENTIALS_PATH: /usr/src/app/serviceAccountKey.json
-      # GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI}
-      # GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      # GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+    working_dir: /usr/src/app
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
       - db
+  redis:
+      image: redis:7-alpine
+      ports:
+        - "6379:6379"
+  flower:
+    build:
+      context: .
+      dockerfile: docker/flower.Dockerfile
+    command: celery -A src.worker.worker flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      PYTHONPATH: /usr/src/app
+      BROKER_URL: ${CELERY_BROKER_URL}
+      RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    depends_on:
+      - redis    
 
+  gpu_worker:
+    build:
+      context: .
+      dockerfile: docker/gpu-worker.Dockerfile
+    container_name: gpu-worker
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./.hf:/usr/src/app/.hf
+      - ./repos:/usr/src/app/repos
+    working_dir: /usr/src/app
+    environment:
+      PYTHONPATH: /usr/src/app
+      CELERY_INCLUDE_TASKS: "1"
+    env_file:
+      - .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - redis
 volumes:
   pgdata:
