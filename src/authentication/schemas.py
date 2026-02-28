@@ -23,6 +23,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserRead
 
+class GitHubSyncRequest(BaseModel):
+    github_access_token: str    
+
 # from pydantic import BaseModel, ConfigDict
 
 

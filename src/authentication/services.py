@@ -1,137 +1,71 @@
-import os
+
+
+
 import requests
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 from authentication.models import User
-from authentication.schemas import GitHubUser, UserRead
-from authentication.utils import create_access_token
+from authentication.schemas import GitHubUser
+from authentication.utils import encrypt_token
 
 
-CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI")
-
-GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
-GITHUB_USER_URL = "https://api.github.com/user"
+GITHUB_USER_API = "https://api.github.com/user"
 
 
-def _exchange_code_for_token(code: str):
-    if not CLIENT_ID or not CLIENT_SECRET or not REDIRECT_URI:
-        raise RuntimeError("Missing GitHub OAuth env vars")
-
-    token_res = requests.post(
-        GITHUB_TOKEN_URL,
-        headers={"Accept": "application/json"},
-        data={
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "code": code,
-            "redirect_uri": REDIRECT_URI,
+def fetch_github_user(access_token: str) -> GitHubUser:
+    r = requests.get(
+        GITHUB_USER_API,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json",
         },
         timeout=15,
     )
-    token_res.raise_for_status()
 
-    access_token = token_res.json().get("access_token")
-    if not access_token:
-        raise ValueError("Token exchange failed")
+    if r.status_code != 200:
+        raise ValueError("Invalid GitHub token")
 
-    return access_token
+    return GitHubUser.model_validate(r.json())
 
 
-def _fetch_github_user(access_token: str):
-    user_res = requests.get(
-        GITHUB_USER_URL,
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=15,
-    )
-    user_res.raise_for_status()
-    return GitHubUser.model_validate(user_res.json())
+def sync_user_first_login(
+    db: Session,
+    *,
+    firebase_uid: str,
+    github_access_token: str,
+) -> User:
 
+    gh_user = fetch_github_user(github_access_token)
 
-def _upsert_user(db: Session, gh_user: GitHubUser):
-    stmt = select(User).where(User.github_id == gh_user.github_id)
-    user = db.execute(stmt).scalar_one_or_none()
+    user = db.query(User).filter(
+        User.firebase_uid == firebase_uid
+    ).first()
 
-    if user:
-        user.username = gh_user.username
-        user.name = gh_user.name
-    else:
+    token_enc = encrypt_token(github_access_token)
+
+    if not user:
         user = User(
+            firebase_uid=firebase_uid,
             github_id=gh_user.github_id,
             username=gh_user.username,
             name=gh_user.name,
+            github_access_token_enc=token_enc,
         )
         db.add(user)
+    else:
+        user.github_id = gh_user.github_id
+        user.username = gh_user.username
+        user.name = gh_user.name
+        user.github_access_token_enc = token_enc
 
     db.commit()
     db.refresh(user)
     return user
 
 
-def login_with_github_code(db: Session, code: str):
-    access_token = _exchange_code_for_token(code)
-    gh_user = _fetch_github_user(access_token)
-    user = _upsert_user(db, gh_user)
-
-    jwt_token = create_access_token(
-        subject=str(user.id),
-        extra={"github_id": user.github_id, "username": user.username},
-    )
-
-    return {
-        "access_token": jwt_token,
-        "token_type": "bearer",
-        "user": UserRead.model_validate(user).model_dump(),
-    }
-
-# import re
-# from sqlalchemy.orm import Session
-# from sqlalchemy import select
-
-# from authentication.models import User
 
 
-# def extract_github_id(sub: str) -> int:
-#     # sub مثل: github|12345678
-#     m = re.match(r"^github\|(\d+)$", sub or "")
-#     if not m:
-#         raise ValueError("Not a GitHub login")
-#     return int(m.group(1))
 
 
-# def get_or_create_user(db: Session, claims: dict) -> User:
-#     sub = claims["sub"]
-#     github_id = extract_github_id(sub)
 
-#     username = (
-#         claims.get("nickname")
-#         or claims.get("preferred_username")
-#         or claims.get("name")
-#         or f"github_{github_id}"
-#     )
-
-#     name = claims.get("name")
-
-#     stmt = select(User).where(User.github_id == github_id)
-#     user = db.execute(stmt).scalar_one_or_none()
-
-#     if user:
-#         user.username = username
-#         user.name = name
-#         db.commit()
-#         db.refresh(user)
-#         return user
-
-#     user = User(
-#         github_id=github_id,
-#         username=username,
-#         name=name,
-#     )
-
-#     db.add(user)
-#     db.commit()
-#     db.refresh(user)
-#     return user
 
