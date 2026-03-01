@@ -1,3 +1,6 @@
+import re
+
+
 def parse_yaml_front_matter(text: str):
     print(text)
     if not text.strip().startswith("---"):
@@ -41,3 +44,15 @@ def split_huge_text(chunk_content: str, max_bytes: int = 6_000) -> list[str]:
     if text:
         texts.append(text)
     return texts
+
+
+def extract_code(text: str) -> str:
+    match = re.search(r"Code:\s*\n?(.*)", text, re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
+def extract_signature(text: str) -> str:
+    match = re.search(
+        r"Signature:\s*\n?(.*?)(?=\n[A-Z][a-zA-Z]+:|\nCode:|\Z)", text, re.DOTALL
+    )
+    return match.group(1).strip() if match else ""

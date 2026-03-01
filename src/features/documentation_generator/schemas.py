@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
-from src.features.indexer.schemas import ChunkRead
+from src.models_loader import ChunkType
 
 # ====================================================================
 
@@ -21,7 +21,13 @@ class DocRead(DocumentationModel):
     id: int
 
 
-class DocChunkRead(DocumentationModel):
-    model_config = ConfigDict(from_attributes=True)
-    chunk: ChunkRead
-    id: int
+class DocModel(BaseModel):
+    chunk_id: int
+    doc_id: int
+    chunk_parent_id: int | None = None
+    start_byte: int | None = None
+    end_byte: int | None = None
+    signature: str | None = None
+    docs: str
+    code: str | None = None
+    type: ChunkType

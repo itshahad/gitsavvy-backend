@@ -12,9 +12,16 @@ from src.features.documentation_generator.exceptions import (
 from src.features.documentation_generator.llm import generate_llm_response  # type: ignore
 
 from src.features.documentation_generator.models import Documentation
-from src.features.documentation_generator.schemas import DocChunkRead, DocCreate
+from src.features.documentation_generator.schemas import (
+    DocCreate,
+    DocModel,
+)
 from src.features.documentation_generator.schemas import DocRead
-from src.features.documentation_generator.utils import parse_yaml_front_matter
+from src.features.documentation_generator.utils import (
+    extract_code,
+    extract_signature,
+    parse_yaml_front_matter,
+)
 from src.features.indexer.models import Chunk, Module, ChunkType, File
 from src.features.indexer.constants import AST_LANG_EXT
 from src.features.indexer.router import FileRead, Path, get_file_complete_path
@@ -326,7 +333,6 @@ class DocService:
     def get_chunk_documentation(
         self,
         file_id: int,
-        # chunk_type: ChunkType,
         limit: int = 20,
         cursor: int | None = None,
     ):
@@ -358,12 +364,23 @@ class DocService:
                 next_cursor = rows[-1][0].id  # each row is (chunk, documentation)
                 rows = rows[:limit]
 
-            docs: list[DocChunkRead] = []
+            docs: list[DocModel] = []
             for chunk, doc in rows:
                 chunk_model = ChunkRead.model_validate(chunk)
                 doc_model = DocRead.model_validate(doc)
-
-                doc_chunk = DocChunkRead(**doc_model.model_dump(), chunk=chunk_model)
+                code = extract_code(chunk_model.content_text)
+                signature = extract_signature(chunk_model.content_text)
+                doc_chunk = DocModel(
+                    chunk_id=chunk_model.id,
+                    doc_id=doc_model.id,
+                    code=code,
+                    docs=doc_model.detailed_doc,
+                    type=chunk_model.type,
+                    signature=signature if signature != "" else None,
+                    chunk_parent_id=chunk_model.chunk_parent_id,
+                    start_byte=chunk_model.start_byte,
+                    end_byte=chunk_model.end_byte,
+                )
                 docs.append(doc_chunk)
 
             return (docs, next_cursor)
