@@ -9,7 +9,7 @@ from src.features.documentation_generator.exceptions import (
     ModuleNotFound,
     RepoNotFound,
 )
-from src.features.documentation_generator.llm import generate_llm_response  # type: ignore
+from src.core.llm import generate_llm_response  # type: ignore
 
 from src.features.documentation_generator.models import Documentation
 from src.features.documentation_generator.schemas import (

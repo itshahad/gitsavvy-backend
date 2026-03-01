@@ -1,11 +1,13 @@
+import json
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.features.chatbot.constants import SYS_PROMPT_CHATBOT
+from src.features.chatbot.constants import SYS_PROMPT_CHATBOT  # type: ignore
 
-from src.features.documentation_generator.llm import generate_llm_response
+from src.core.llm import stream_llm_response
+from src.features.chatbot.tasks import REDIS_SYNC
 from src.features.indexer.models import Chunk, ChunkEmbedding
 from src.features.indexer.tasks import EmbeddingService
 
@@ -78,18 +80,39 @@ class ChatbotService:
             parts.append(header + "\n" + chunk.content_text)
         return "\n\n---\n\n".join(parts)
 
-    def run_chatbot(self, query: str):
+    def run_chatbot(self, query: str, channel: str):
         chunks = self.get_relevant_documents(query=query)
 
         context = self.format_context(chunks=chunks)
 
         USER_PROMPT = f"Question: {query}\n\nContext:\n{context}"
+        try:
+            buffer: list[str] = []
+            for res in stream_llm_response(
+                model=self.llm_model,
+                tokenizer=self.llm_tokenizer,
+                sys_prompt=SYS_PROMPT_CHATBOT,
+                usr_prompt=USER_PROMPT,
+            ):
+                buffer.append(res)
 
-        res = generate_llm_response(
-            model=self.llm_model,
-            tokenizer=self.llm_tokenizer,
-            sys_prompt=SYS_PROMPT_CHATBOT,
-            usr_prompt=USER_PROMPT,
-        )
-
-        return res
+                if len(buffer) >= 10:
+                    REDIS_SYNC.publish(  # type: ignore
+                        channel=channel,
+                        message=json.dumps({"type": "token", "data": "".join(buffer)}),
+                    )
+                    buffer.clear()
+            if buffer:
+                REDIS_SYNC.publish(  # type: ignore
+                    channel=channel,
+                    message=json.dumps({"type": "token", "data": "".join(buffer)}),
+                )
+            REDIS_SYNC.publish(  # type: ignore
+                channel=channel,
+                message=json.dumps({"type": "done"}),
+            )
+        except Exception as e:
+            REDIS_SYNC.publish(  # type: ignore
+                channel=channel,
+                message=json.dumps({"type": "error", "data": str(e)}),
+            )

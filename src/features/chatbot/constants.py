@@ -1,3 +1,8 @@
+from redis import Redis
+
+from src.config import CELERY_BROKER_URL
+
+
 SYS_PROMPT_CHATBOT = """
 You are GitSavvy, an expert repository analysis assistant.
 
@@ -33,3 +38,4 @@ Output Guidelines:
 
 Your goal is to help developers understand THIS repository accurately and safely.
 """
+REDIS_SYNC = Redis.from_url(f"{CELERY_BROKER_URL}/0", decode_responses=True)  # type: ignore

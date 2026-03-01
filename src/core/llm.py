@@ -1,5 +1,6 @@
 # type: ignore [all]
-from typing import Any
+from typing import Any, Generator
+
 
 from src.config import LLM_MODEL_NAME, HF_HOME
 import threading
@@ -10,7 +11,11 @@ from src.features.documentation_generator.constants import SYSTEM_PROMPT
 from src.features.documentation_generator.utils import split_huge_text
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase, PreTrainedModel
+    from transformers import (
+        PreTrainedTokenizerBase,
+        PreTrainedModel,
+        TextIteratorStreamer,
+    )
 
 
 _MODEL: Any = None
@@ -203,3 +208,51 @@ def generate_llm_response(
         partial_summaries.append(
             decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
         )
+
+
+def stream_llm_response(
+    tokenizer: Any,
+    model: Any,
+    content: str | None = None,
+    file_path: str | None = None,
+    sys_prompt: str | None = None,
+    usr_prompt: str | None = None,
+    max_new_tokens: int = 512,
+    temperature: float = 0.2,
+    top_p: float = 0.9,
+    repetition_penalty: float = 1.05,
+) -> Generator[str, None, None]:
+    from transformers import TextIteratorStreamer
+
+    prompt = create_prompt(
+        file_path=file_path,
+        content=content,
+        usr_prompt=usr_prompt,
+        sys_prompt=sys_prompt,
+    )
+    full_text = apply_chat_template(messages=prompt, tokenizer=tokenizer)
+
+    inputs = create_model_input(full_text, tokenizer, model)
+
+    streamer = TextIteratorStreamer(
+        tokenizer=tokenizer,
+        skip_prompt=True,
+        skip_special_tokens=True,
+    )
+
+    gen_kwargs = dict(
+        **inputs,
+        streamer=streamer,
+        max_new_tokens=max_new_tokens,
+        do_sample=(temperature > 0),
+        temperature=temperature,
+        top_p=top_p,
+        repetition_penalty=repetition_penalty,
+    )
+
+    t = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
+    t.start()
+
+    for text in streamer:
+        if text:
+            yield text

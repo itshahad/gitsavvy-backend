@@ -5,7 +5,7 @@ from zipfile import ZipFile, BadZipFile, LargeZipFile
 from tree_sitter_language_pack import get_parser
 from src.features.indexer.constants import *
 from src.features.indexer.config import *
-from src.features.indexer.embedder import batch_encoding, embed_text, embed_texts  # type: ignore
+from src.core.embedder import batch_encoding, embed_text, embed_texts  # type: ignore
 from src.features.indexer.utils import *
 from src.features.indexer.schemas import *
 from src.features.indexer.models import *
