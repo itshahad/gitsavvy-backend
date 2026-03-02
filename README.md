@@ -2,8 +2,9 @@
 
 ## 1- ensure you have docker installed in your device
 
-## 2- request the db dump from me "Shahad" 
+## 2- request the db dump and env file from me "Shahad" 
 * add the dump file to `postgres` folder
+* add the `.env` file to project root folder
 
 ## 3- run the command `docker-compose up -d --build` in terminal
 
