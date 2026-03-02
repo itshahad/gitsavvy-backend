@@ -1,12 +1,9 @@
 from typing import TypedDict
-from annotated_types import Len
 from celery import Task  # type: ignore
 import requests
-from src.features.documentation_generator.llm import get_llm_model, get_llm_tokenizer
-from src.features.documentation_generator.schemas import DocRead
-from src.features.documentation_generator.service import DocGenerateService, LlmService
+from src.features.documentation_generator.service import DocGenerateService
 
-from src.worker import worker
+from src.worker import LLM_MODEL, LLM_TOKENIZER, worker  # type: ignore
 from src.database import SessionLocal
 
 
@@ -28,20 +25,19 @@ def docs_generator(
     db_session = SessionLocal()
     http = requests.session()
 
-    llm_model = get_llm_model()
-    tokenizer = get_llm_tokenizer()
     # llm_model = None
     # tokenizer = None
 
-    llm_service = LlmService(
-        session=db_session, llm_model=llm_model, tokenizer=tokenizer
-    )
+    # llm_service = LlmService(
+    #     session=db_session, llm_model=llm_model, tokenizer=tokenizer
+    # )
 
     doc_generate_service = DocGenerateService(
         session=db_session,
         repo_id=repo_id,
         repo_name=repo_name,
-        llm_service=llm_service,
+        tokenizer=LLM_TOKENIZER,
+        model=LLM_MODEL,
         start_from_module_id=start_from_module,
         start_from_file_id=start_from_file,
         start_from_chunk_id=start_from_chunk,

@@ -1,10 +1,9 @@
 from typing import TypedDict
 from celery import Task  # type: ignore
 import requests
-from src.features.indexer.embedder import get_embedder_model, get_tokenizer
 from src.features.indexer.service import ChunkingService, EmbeddingService, RepoService
 
-from src.worker import worker
+from src.worker import EMBEDDER, EMBEDDING_TOKENIZER, worker  # type: ignore
 from src.database import SessionLocal
 from src.features.indexer.utils import get_repo_path
 
@@ -23,9 +22,6 @@ class IndexerResult(TypedDict):
 def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
     db_session = SessionLocal()
     http = requests.session()
-
-    embedder = get_embedder_model()
-    tokenizer = get_tokenizer()
 
     repo_service = RepoService(
         db_session=db_session, http_session=http, repo_name=repo_name
@@ -50,8 +46,8 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
         embedding_service = EmbeddingService(
             db_session=db_session,
             chunking_service=None,
-            embedder=embedder,
-            tokenizer=tokenizer,
+            embedder=EMBEDDER,
+            tokenizer=EMBEDDING_TOKENIZER,
         )
 
         chunking_service = ChunkingService(
@@ -69,9 +65,7 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
             commit_sha=commit_sha,
         )
 
-        embeddings = embedding_service.embed_chunks(
-            chunks=chunks, tokenizer=tokenizer, embedder=embedder
-        )
+        embeddings = embedding_service.embed_chunks(chunks=chunks)
 
         db_session.commit()
 

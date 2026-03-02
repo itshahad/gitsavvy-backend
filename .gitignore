@@ -211,3 +211,4 @@ __marimo__/
 #downloaded files
 repos/
 .hf/
+*.dump
