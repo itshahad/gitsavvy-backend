@@ -1,20 +1,33 @@
 from typing import Any, Generator
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import case, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 
-from src.features.documentation_generator.constants import SYS_PROMPT_COMBINE_DOCS
-from src.features.documentation_generator.llm import MAX_INPUT_TOKENS, apply_chat_template, create_docs_generation_prompt, create_model_input, decode_generated_text, generate_text, safe_prompt, split_huge_chunk  # type: ignore
+from src.exceptions import DatabaseError
+from src.features.documentation_generator.exceptions import (
+    FileNotFound,
+    ModuleNotFound,
+    RepoNotFound,
+)
+from src.core.llm import generate_llm_response  # type: ignore
 
 from src.features.documentation_generator.models import Documentation
-from src.features.documentation_generator.schemas import DocCreate
-from src.features.documentation_generator.tasks import DocRead
-from src.features.documentation_generator.utils import parse_yaml_front_matter
+from src.features.documentation_generator.schemas import (
+    DocCreate,
+    DocModel,
+)
+from src.features.documentation_generator.schemas import DocRead
+from src.features.documentation_generator.utils import (
+    extract_code,
+    extract_signature,
+    parse_yaml_front_matter,
+)
 from src.features.indexer.models import Chunk, Module, ChunkType, File
 from src.features.indexer.constants import AST_LANG_EXT
 from src.features.indexer.router import FileRead, Path, get_file_complete_path
-from src.features.indexer.schemas import ModuleRead
+from src.features.indexer.schemas import ChunkRead, ModuleRead, RepoRead
 from src.features.indexer.service import normalize_repo_path
-from src.models_loader import OutlineType
+from src.models_loader import OutlineType, Repository
 
 
 class DocGenerateService:
@@ -23,7 +36,8 @@ class DocGenerateService:
         session: Session,
         repo_id: int,
         repo_name: str,
-        llm_service: "LlmService",
+        tokenizer: Any,
+        model: Any,
         start_from_module_id: int | None = None,
         start_from_file_id: int | None = None,
         start_from_chunk_id: int | None = None,
@@ -31,7 +45,9 @@ class DocGenerateService:
         self.session = session
         self.repo_id = repo_id
         self.repo_name = repo_name
-        self.llm_service = llm_service
+        self.tokenizer = tokenizer
+        self.model = model
+        # self.llm_service = llm_service
         self.start_from_module_id = start_from_module_id
         self.start_from_file_id = start_from_file_id
         self.start_from_chunk_id = start_from_chunk_id
@@ -182,8 +198,11 @@ class DocGenerateService:
             src=src, ranges=content, children_docs=children_docs
         )
 
-        doc = self.llm_service.generate_llm_response(
-            file_path=normalize_repo_path(file.file_path), content=text
+        doc = generate_llm_response(
+            file_path=normalize_repo_path(file.file_path),
+            content=text,
+            tokenizer=self.tokenizer,
+            model=self.model,
         )
 
         short_summary, detailed_documentation = parse_yaml_front_matter(doc)
@@ -244,103 +263,225 @@ class DocGenerateService:
         return DocRead.model_validate(doc_db)
 
 
-class LlmService:
-    def __init__(self, session: Session, llm_model: Any, tokenizer: Any) -> None:
-        self.session = session
-        self.llm_model = llm_model
-        self.tokenizer = tokenizer
+class DocService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
 
-    def generate_llm_response(self, file_path: str, content: str) -> str:
-        prompt = create_docs_generation_prompt(file_path=file_path, content=content)
-        full_text = apply_chat_template(messages=prompt, tokenizer=self.tokenizer)
-        print(f"full_text {full_text}")
+    def get_repo(self, repo_id: int):
+        repo = self.db.get(Repository, repo_id)
+        if repo is None:
+            raise RepoNotFound(repo_id=repo_id)
+        return RepoRead.model_validate(repo)
 
-        if safe_prompt(tokenizer=self.tokenizer, text=full_text):
-            model_inputs = create_model_input(
-                text=full_text, tokenizer=self.tokenizer, model=self.llm_model
+    def get_module(self, module_id: int):
+        module = self.db.get(Module, module_id)
+        if module is None:
+            raise ModuleNotFound(module_id=module_id)
+        return ModuleRead.model_validate(module)
+
+    def get_file(self, file_id: int):
+        file = self.db.get(File, file_id)
+        if file is None:
+            raise FileNotFound(file_id=file_id)
+        return FileRead.model_validate(file)
+
+    def get_modules(self, repo_id: int, limit: int = 20, cursor: int | None = None):
+        try:
+            self.get_repo(repo_id=repo_id)
+            filters = [Module.repository_id == repo_id]
+            if cursor is not None:
+                filters.append(Module.id > cursor)
+            stmt = select(Module).where(*filters).order_by(Module.id).limit(limit + 1)
+
+            modules = self.db.execute(stmt).scalars().all()
+
+            has_more = len(modules) > limit
+            next_cursor = None
+
+            if has_more:
+                next_cursor = modules[-1].id
+                modules = modules[:limit]
+
+            return (
+                [ModuleRead.model_validate(module) for module in modules],
+                next_cursor,
             )
-            gen_ids = generate_text(
-                model=self.llm_model, model_inputs=model_inputs, max_new_tokens=512
+        except SQLAlchemyError as e:
+            raise DatabaseError from e
+
+    def get_files(self, module_id: int, limit: int = 20, cursor: int | None = None):
+        try:
+            self.get_module(module_id=module_id)
+            filters = [File.module_id == module_id]
+            if cursor is not None:
+                filters.append(File.id > cursor)
+            stmt = select(File).where(*filters).order_by(File.id).limit(limit + 1)
+
+            files = self.db.execute(stmt).scalars().all()
+
+            has_more = len(files) > limit
+            next_cursor = None
+
+            if has_more:
+                next_cursor = files[-1].id
+                files = files[:limit]
+
+            return ([FileRead.model_validate(file) for file in files], next_cursor)
+        except SQLAlchemyError as e:
+            raise DatabaseError from e
+
+    def get_chunk_documentation(
+        self,
+        file_id: int,
+        limit: int = 20,
+        cursor: int | None = None,
+    ):
+        try:
+            self.get_file(file_id=file_id)
+            order_case = case(
+                (Chunk.type == ChunkType.FILE_SUMMARY, 0),
+                (Chunk.type == ChunkType.CLASS_SUMMARY, 1),
+                (Chunk.type == ChunkType.FUNCTION, 2),
+                else_=99,
             )
-            return decode_generated_text(
-                generated_ids=gen_ids, tokenizer=self.tokenizer
+            filters = [Chunk.file_id == file_id]
+            if cursor is not None:
+                filters.append(Chunk.id > cursor)
+            stmt = (
+                select(Chunk, Documentation)
+                .join(Documentation, Documentation.chunk_id == Chunk.id)
+                .where(*filters)
+                .order_by(order_case, Chunk.start_byte)
+                .limit(limit + 1)
             )
 
-        parts = split_huge_chunk(content)
-        partial_summaries: list[str] = []
+            rows = self.db.execute(stmt).all()
 
-        for part in parts:
-            part_prompt = create_docs_generation_prompt(
-                file_path=file_path, content=part
-            )
-            part_text = apply_chat_template(
-                messages=part_prompt, tokenizer=self.tokenizer
-            )
-            print(f"part_text {part_text}")
+            has_more = len(rows) > limit
+            next_cursor = None
 
-            if not safe_prompt(self.tokenizer, part_text):
-                subparts = split_huge_chunk(part, max_bytes=3_000)
-                for sp in subparts:
-                    sp_prompt = create_docs_generation_prompt(
-                        file_path=file_path, content=sp
-                    )
-                    sp_text = apply_chat_template(
-                        messages=sp_prompt, tokenizer=self.tokenizer
-                    )
-                    if not safe_prompt(tokenizer=self.tokenizer, text=sp_text):
-                        sp_ids = self.tokenizer(
-                            sp_text,
-                            return_tensors="pt",
-                            truncation=True,
-                            max_length=MAX_INPUT_TOKENS,
-                        ).to(self.llm_model.device)
-                        gen_ids = generate_text(
-                            model=self.llm_model,
-                            model_inputs=sp_ids,
-                            max_new_tokens=256,
-                        )
-                    else:
-                        sp_inputs = create_model_input(
-                            sp_text, self.tokenizer, self.llm_model
-                        )
-                        gen_ids = generate_text(
-                            model=self.llm_model,
-                            model_inputs=sp_inputs,
-                            max_new_tokens=256,
-                        )
-                    partial_summaries.append(
-                        decode_generated_text(
-                            generated_ids=gen_ids, tokenizer=self.tokenizer
-                        )
-                    )
-                continue
+            if has_more:
+                next_cursor = rows[-1][0].id  # each row is (chunk, documentation)
+                rows = rows[:limit]
 
-            part_inputs = create_model_input(
-                text=part_text, tokenizer=self.tokenizer, model=self.llm_model
-            )
-            gen_ids = generate_text(
-                model=self.llm_model, model_inputs=part_inputs, max_new_tokens=256
-            )
-            partial_summaries.append(
-                decode_generated_text(generated_ids=gen_ids, tokenizer=self.tokenizer)
-            )
+            docs: list[DocModel] = []
+            for chunk, doc in rows:
+                chunk_model = ChunkRead.model_validate(chunk)
+                doc_model = DocRead.model_validate(doc)
+                code = extract_code(chunk_model.content_text)
+                signature = extract_signature(chunk_model.content_text)
+                doc_chunk = DocModel(
+                    chunk_id=chunk_model.id,
+                    doc_id=doc_model.id,
+                    code=code,
+                    docs=doc_model.detailed_doc,
+                    type=chunk_model.type,
+                    signature=signature if signature != "" else None,
+                    chunk_parent_id=chunk_model.chunk_parent_id,
+                    start_byte=chunk_model.start_byte,
+                    end_byte=chunk_model.end_byte,
+                )
+                docs.append(doc_chunk)
 
-        merged_content = "\n\n".join(
-            f"- {s.strip()}" for s in partial_summaries if s.strip()
-        )
-        merge_prompt = create_docs_generation_prompt(
-            file_path=file_path,
-            sys_prompt=SYS_PROMPT_COMBINE_DOCS,
-            usr_prompt=f"{merged_content}",
-        )
-        merge_text = apply_chat_template(
-            messages=merge_prompt, tokenizer=self.tokenizer
-        )
+            return (docs, next_cursor)
 
-        model_inputs = create_model_input(
-            text=merge_text, tokenizer=self.tokenizer, model=self.llm_model
-        )
-        gen_ids = generate_text(
-            model=self.llm_model, model_inputs=model_inputs, max_new_tokens=512
-        )
-        return decode_generated_text(generated_ids=gen_ids, tokenizer=self.tokenizer)
+        except SQLAlchemyError as e:
+            raise DatabaseError from e
+
+
+# class LlmService:
+#     def __init__(self, session: Session, llm_model: Any, tokenizer: Any) -> None:
+#         self.session = session
+#         self.llm_model = llm_model
+#         self.tokenizer = tokenizer
+
+#     def generate_llm_response(self, file_path: str, content: str) -> str:
+#         prompt = create_prompt(file_path=file_path, content=content)
+#         full_text = apply_chat_template(messages=prompt, tokenizer=self.tokenizer)
+#         print(f"full_text {full_text}")
+
+#         if safe_prompt(tokenizer=self.tokenizer, text=full_text):
+#             model_inputs = create_model_input(
+#                 text=full_text, tokenizer=self.tokenizer, model=self.llm_model
+#             )
+#             gen_ids = generate_text(
+#                 model=self.llm_model, model_inputs=model_inputs, max_new_tokens=512
+#             )
+#             return decode_generated_text(
+#                 generated_ids=gen_ids, tokenizer=self.tokenizer
+#             )
+
+#         parts = split_huge_text(content)
+#         partial_summaries: list[str] = []
+
+#         for part in parts:
+#             part_prompt = create_prompt(file_path=file_path, content=part)
+#             part_text = apply_chat_template(
+#                 messages=part_prompt, tokenizer=self.tokenizer
+#             )
+#             print(f"part_text {part_text}")
+
+#             if not safe_prompt(self.tokenizer, part_text):
+#                 subparts = split_huge_text(part, max_bytes=3_000)
+#                 for sp in subparts:
+#                     sp_prompt = create_prompt(file_path=file_path, content=sp)
+#                     sp_text = apply_chat_template(
+#                         messages=sp_prompt, tokenizer=self.tokenizer
+#                     )
+#                     if not safe_prompt(tokenizer=self.tokenizer, text=sp_text):
+#                         sp_ids = self.tokenizer(
+#                             sp_text,
+#                             return_tensors="pt",
+#                             truncation=True,
+#                             max_length=MAX_INPUT_TOKENS,
+#                         ).to(self.llm_model.device)
+#                         gen_ids = generate_text(
+#                             model=self.llm_model,
+#                             model_inputs=sp_ids,
+#                             max_new_tokens=256,
+#                         )
+#                     else:
+#                         sp_inputs = create_model_input(
+#                             sp_text, self.tokenizer, self.llm_model
+#                         )
+#                         gen_ids = generate_text(
+#                             model=self.llm_model,
+#                             model_inputs=sp_inputs,
+#                             max_new_tokens=256,
+#                         )
+#                     partial_summaries.append(
+#                         decode_generated_text(
+#                             generated_ids=gen_ids, tokenizer=self.tokenizer
+#                         )
+#                     )
+#                 continue
+
+#             part_inputs = create_model_input(
+#                 text=part_text, tokenizer=self.tokenizer, model=self.llm_model
+#             )
+#             gen_ids = generate_text(
+#                 model=self.llm_model, model_inputs=part_inputs, max_new_tokens=256
+#             )
+#             partial_summaries.append(
+#                 decode_generated_text(generated_ids=gen_ids, tokenizer=self.tokenizer)
+#             )
+
+#         merged_content = "\n\n".join(
+#             f"- {s.strip()}" for s in partial_summaries if s.strip()
+#         )
+#         merge_prompt = create_prompt(
+#             file_path=file_path,
+#             sys_prompt=SYS_PROMPT_COMBINE_DOCS,
+#             usr_prompt=f"{merged_content}",
+#         )
+#         merge_text = apply_chat_template(
+#             messages=merge_prompt, tokenizer=self.tokenizer
+#         )
+
+#         model_inputs = create_model_input(
+#             text=merge_text, tokenizer=self.tokenizer, model=self.llm_model
+#         )
+#         gen_ids = generate_text(
+#             model=self.llm_model, model_inputs=model_inputs, max_new_tokens=512
+#         )
+#         return decode_generated_text(generated_ids=gen_ids, tokenizer=self.tokenizer)

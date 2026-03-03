@@ -5,7 +5,7 @@ from zipfile import ZipFile, BadZipFile, LargeZipFile
 from tree_sitter_language_pack import get_parser
 from src.features.indexer.constants import *
 from src.features.indexer.config import *
-from src.features.indexer.embedder import batch_encoding, embed_text, embed_texts  # type: ignore
+from src.core.embedder import batch_encoding, embed_text, embed_texts  # type: ignore
 from src.features.indexer.utils import *
 from src.features.indexer.schemas import *
 from src.features.indexer.models import *
@@ -675,7 +675,7 @@ class EmbeddingService:
         db_session: Session,
         embedder: Any,
         tokenizer: Any,
-        chunking_service: "ChunkingService | None",
+        chunking_service: "ChunkingService | None" = None,
     ) -> None:
         self.db_session = db_session
         self.chunking_service = chunking_service
@@ -695,17 +695,15 @@ class EmbeddingService:
     def embed_chunks(
         self,
         chunks: list[ChunkRead],
-        tokenizer: Any,
-        embedder: Any,
         is_commit: bool = False,
     ):
-        device = next(embedder.parameters()).device
+        device = next(self.embedder.parameters()).device
         embeddings: list[ChunkEmbeddingRead] = []
         for chunk in chunks:
             vec, _meta = embed_text(
                 text=chunk.content_text,
-                tokenizer=tokenizer,
-                model=embedder,
+                tokenizer=self.tokenizer,
+                model=self.embedder,
                 batch_encoding=batch_encoding,
                 embed_texts=embed_texts,
                 device=device,
@@ -718,3 +716,15 @@ class EmbeddingService:
         if is_commit:
             self.db_session.commit()
         return embeddings
+
+    def embed_text(self, text: str):
+        device = next(self.embedder.parameters()).device
+        vec, _meta = embed_text(
+            text=text,
+            tokenizer=self.tokenizer,
+            model=self.embedder,
+            batch_encoding=batch_encoding,
+            embed_texts=embed_texts,
+            device=device,
+        )
+        return vec, _meta

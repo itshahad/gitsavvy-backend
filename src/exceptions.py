@@ -1,5 +1,7 @@
 class ExternalServiceError(Exception):
-    def __init__(self, service: str, message: str | None = None, status_code: int | None = None):
+    def __init__(
+        self, service: str, message: str | None = None, status_code: int | None = None
+    ):
         self.service = service
         self.message = message
         self.status_code = status_code
@@ -16,3 +18,7 @@ class StorageError(Exception):
     def __init__(self, message: str | None = None):
         self.message = message
         super().__init__(message or "storage error")
+
+
+class DatabaseError(Exception):
+    pass

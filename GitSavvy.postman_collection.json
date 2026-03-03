@@ -1,0 +1,263 @@
+{
+  "info": {
+    "_postman_id": "c39a5134-df01-4387-9f24-e28852c0b11a",
+    "name": "GitSavvy",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "42450555"
+  },
+  "item": [
+    {
+      "name": "Documentation",
+      "item": [
+        {
+          "name": "step 2 - get modules files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files?cursor=num",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "documentation",
+                "{{repo_id}}",
+                "modules",
+                "{{module_id}}",
+                "files"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "num",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "documentation",
+                    "{{repo_id}}",
+                    "modules",
+                    "{{module_id}}",
+                    "files"
+                  ],
+                  "query": [
+                    {
+                      "key": "cursor",
+                      "value": "num",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sun, 01 Mar 2026 13:00:50 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "707"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"data\": [\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/custom.js\",\n            \"content_hash\": \"9e00539895c8afb97888ce7999c9dc3a28779ee2\",\n            \"id\": 256\n        },\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/init_kapa_widget.js\",\n            \"content_hash\": \"86683301cec550883805534c8c399596561c211f\",\n            \"id\": 257\n        },\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/termynal.js\",\n            \"content_hash\": \"26afba3fda03387f5c21f9f1d5e18decc6a0432e\",\n            \"id\": 258\n        }\n    ],\n    \"next_cursor\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "step 3 - get file docs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files/{{file_id}}/docs?cursor=num",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "documentation",
+                "{{repo_id}}",
+                "modules",
+                "{{module_id}}",
+                "files",
+                "{{file_id}}",
+                "docs"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "num",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files/{{file_id}}/docs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "documentation",
+                    "{{repo_id}}",
+                    "modules",
+                    "{{module_id}}",
+                    "files",
+                    "{{file_id}}",
+                    "docs"
+                  ],
+                  "query": [
+                    {
+                      "key": "cursor",
+                      "value": "num",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "",
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sun, 01 Mar 2026 13:01:52 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "14454"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [
+                {
+                  "expires": "Invalid Date",
+                  "domain": "",
+                  "path": ""
+                }
+              ],
+              "body": "{\n    \"data\": [\n        {\n            \"chunk_id\": 467,\n            \"doc_id\": 6,\n            \"chunk_parent_id\": null,\n            \"start_byte\": null,\n            \"end_byte\": null,\n            \"signature\": null,\n            \"docs\": \"## custom.js\\n\\n### Overview\\nThis file contains several JavaScript functions related to managing interactive terminal simulations, displaying random announcements, and handling sponsor images.\\n\\n### Functions\\n\\n#### `setupTermynal`\\n- **Description**: Initializes and manages Termynal instances for interactive terminal simulations.\\n- **Behavior**: This function is intended to set up Termynal instances, but its actual implementation details are not provided.\\n\\n#### `shuffle`\\n- **Description**: Randomly shuffles elements in an array.\\n- **Parameters**:\\n  - `array` (Array): The array to shuffle.\\n- **Returns**: The shuffled array.\\n\\n#### `showRandomAnnouncement`\\n- **Description**: Displays random announcements in a group element with a specified interval.\\n- **Parameters**:\\n  - `groupId` (string): The ID of the group element where announcements will be displayed.\\n  - `timeInterval` (number): The interval between displaying each announcement.\\n- **Behavior**: This function appears to display random announcements in the specified group element at the given interval.\\n\\n#### `handleSponsorImages`\\n- **Description**: Handles loading images within the 'announce-right' element and shows random announcements once all images are loaded.\\n- **Behavior**: This function loads images within the 'announce-right' element and displays random announcements once all images have been fully loaded.\\n\\n#### `main`\\n- **Description**: Main function that sets up Termynal, shows a random announcement, and handles sponsor images.\\n- **Behavior**: This function initializes Termynal, calls `showRandomAnnouncement`, and handles sponsor images by subscribing to `document$`.\\n\\n### Execution Flow\\n- The `main` function is called when the `document$` observable emits a value, which happens through a subscription.\\n- Inside `main`, `setupTermynal` is called to initialize Termynal.\\n- `showRandomAnnouncement` is called to display random announcements.\\n- `handleSponsorImages` is called to load images and handle sponsor announcements.\",\n            \"code\": \"\",\n            \"type\": \"file_summary\"\n        },\n        {\n            \"chunk_id\": 468,\n            \"doc_id\": 1,\n            \"chunk_parent_id\": 467,\n            \"start_byte\": 0,\n            \"end_byte\": 4615,\n            \"signature\": \"function setupTermynal()\",\n            \"docs\": \"## setupTermynal\\n\\n### Description\\nThis function initializes Termynal instances for elements with the class `.use-termynal`. It sets up event listeners to handle lazy loading of Termynal instances as they become visible in the viewport.\\n\\n### Behavior\\n1. **Initialization**: Iterates over all elements with the class `.use-termynal` and sets their display style to `block`.\\n2. **Termynal Creation**: For each element, it processes its content to extract commands and creates a new `Termynal` instance.\\n3. **Lazy Loading**: Sets up a scroll event listener to initialize Termynal instances as they come into view.\\n\\n### Edge Cases\\n- Handles cases where the custom prompt literal starts (`# `) without the corresponding end delimiter by logging an error.\\n- Ensures that a last single `<br>` does not affect the rendering by adding an additional one if necessary.\\n\\n### Errors\\n- Logs an error message if a custom prompt is found but no end delimiter is present.\",\n            \"code\": \"function setupTermynal() {\\n    document.querySelectorAll(\\\".use-termynal\\\").forEach(node => {\\n        node.style.display = \\\"block\\\";\\n        new Termynal(node, {\\n            lineDelay: 500\\n        });\\n    });\\n    const progressLiteralStart = \\\"---> 100%\\\";\\n    const promptLiteralStart = \\\"$ \\\";\\n    const customPromptLiteralStart = \\\"# \\\";\\n    const termynalActivateClass = \\\"termy\\\";\\n    let termynals = [];\\n\\n    function createTermynals() {\\n        document\\n            .querySelectorAll(`.${termynalActivateClass} .highlight code`)\\n            .forEach(node => {\\n                const text = node.textContent;\\n                const lines = text.split(\\\"\\\\n\\\");\\n                const useLines = [];\\n                let buffer = [];\\n                function saveBuffer() {\\n                    if (buffer.length) {\\n                        let isBlankSpace = true;\\n                        buffer.forEach(line => {\\n                            if (line) {\\n                                isBlankSpace = false;\\n                            }\\n                        });\\n                        dataValue = {};\\n                        if (isBlankSpace) {\\n                            dataValue[\\\"delay\\\"] = 0;\\n                        }\\n                        if (buffer[buffer.length - 1] === \\\"\\\") {\\n                            // A last single <br> won't have effect\\n                            // so put an additional one\\n                            buffer.push(\\\"\\\");\\n                        }\\n                        const bufferValue = buffer.join(\\\"<br>\\\");\\n                        dataValue[\\\"value\\\"] = bufferValue;\\n                        useLines.push(dataValue);\\n                        buffer = [];\\n                    }\\n                }\\n                for (let line of lines) {\\n                    if (line === progressLiteralStart) {\\n                        saveBuffer();\\n                        useLines.push({\\n                            type: \\\"progress\\\"\\n                        });\\n                    } else if (line.startsWith(promptLiteralStart)) {\\n                        saveBuffer();\\n                        const value = line.replace(promptLiteralStart, \\\"\\\").trimEnd();\\n                        useLines.push({\\n                            type: \\\"input\\\",\\n                            value: value\\n                        });\\n                    } else if (line.startsWith(\\\"// \\\")) {\\n                        saveBuffer();\\n                        const value = \\\"💬 \\\" + line.replace(\\\"// \\\", \\\"\\\").trimEnd();\\n                        useLines.push({\\n                            value: value,\\n                            class: \\\"termynal-comment\\\",\\n                            delay: 0\\n                        });\\n                    } else if (line.startsWith(customPromptLiteralStart)) {\\n                        saveBuffer();\\n                        const promptStart = line.indexOf(promptLiteralStart);\\n                        if (promptStart === -1) {\\n                            console.error(\\\"Custom prompt found but no end delimiter\\\", line)\\n                        }\\n                        const prompt = line.slice(0, promptStart).replace(customPromptLiteralStart, \\\"\\\")\\n                        let value = line.slice(promptStart + promptLiteralStart.length);\\n                        useLines.push({\\n                            type: \\\"input\\\",\\n                            value: value,\\n                            prompt: prompt\\n                        });\\n                    } else {\\n                        buffer.push(line);\\n                    }\\n                }\\n                saveBuffer();\\n                const inputCommands = useLines\\n                    .filter(line => line.type === \\\"input\\\")\\n                    .map(line => line.value)\\n                    .join(\\\"\\\\n\\\");\\n                node.textContent = inputCommands;\\n                const div = document.createElement(\\\"div\\\");\\n                node.style.display = \\\"none\\\";\\n                node.after(div);\\n                const termynal = new Termynal(div, {\\n                    lineData: useLines,\\n                    noInit: true,\\n                    lineDelay: 500\\n                });\\n                termynals.push(termynal);\\n            });\\n    }\\n\\n    function loadVisibleTermynals() {\\n        termynals = termynals.filter(termynal => {\\n            if (termynal.container.getBoundingClientRect().top - innerHeight <= 0) {\\n                termynal.init();\\n                return false;\\n            }\\n            return true;\\n        });\\n    }\\n    window.addEventListener(\\\"scroll\\\", loadVisibleTermynals);\\n    createTermynals();\\n    loadVisibleTermynals();\\n}\",\n            \"type\": \"function\"\n        },\n        {\n            \"chunk_id\": 469,\n            \"doc_id\": 2,\n            \"chunk_parent_id\": 467,\n            \"start_byte\": 4617,\n            \"end_byte\": 4999,\n            \"signature\": \"function shuffle(array)\",\n            \"docs\": \"## shuffle\\n### Description\\nJavaScript function to randomly shuffle elements in an array.\\n\\n### Parameters\\n- `array` (Array): The array to shuffle.\\n\\n### Returns\\n- Array: The shuffled array.\\n\\n### Behavior\\nThis function shuffles the elements of the input array in place and returns the shuffled array. It uses the Fisher-Yates algorithm to ensure each permutation is equally likely.\\n\\n### Edge Cases\\n- If the input array is empty, it will return an empty array.\\n- If the input array contains only one element, it will return the same array since there's only one way to shuffle a single element.\",\n            \"code\": \"function shuffle(array) {\\n    var currentIndex = array.length, temporaryValue, randomIndex;\\n    while (0 !== currentIndex) {\\n        randomIndex = Math.floor(Math.random() * currentIndex);\\n        currentIndex -= 1;\\n        temporaryValue = array[currentIndex];\\n        array[currentIndex] = array[randomIndex];\\n        array[randomIndex] = temporaryValue;\\n    }\\n    return array;\\n}\",\n            \"type\": \"function\"\n        },\n        {\n            \"chunk_id\": 470,\n            \"doc_id\": 3,\n            \"chunk_parent_id\": 467,\n            \"start_byte\": 5001,\n            \"end_byte\": 5590,\n            \"signature\": \"async function showRandomAnnouncement(groupId, timeInterval)\",\n            \"docs\": \"## showRandomAnnouncement\\n### Description\\nDisplays random announcements in a group element identified by `groupId` with a specified interval between announcements.\\n\\n### Parameters\\n- `groupId`: The ID of the HTML element containing the announcements.\\n- `timeInterval`: The interval in milliseconds between each announcement.\\n\\n### Behavior\\n- Retrieves the HTML element with the ID specified by `groupId`.\\n- If the element exists, it shuffles its child elements.\\n- Sets up an interval timer that calls the `announceRandom` function every `timeInterval` milliseconds.\\n- The `announceRandom` function hides all child elements and displays the next one in the shuffled list, cycling through them indefinitely.\\n\\n### Edge Cases\\n- If the element with the specified `groupId` does not exist, the function does nothing.\\n\\n### Errors\\n- None explicitly handled or thrown.\",\n            \"code\": \"async function showRandomAnnouncement(groupId, timeInterval) {\\n    const announceFastAPI = document.getElementById(groupId);\\n    if (announceFastAPI) {\\n        let children = [].slice.call(announceFastAPI.children);\\n        children = shuffle(children)\\n        let index = 0\\n        const announceRandom = () => {\\n            children.forEach((el, i) => { el.style.display = \\\"none\\\" });\\n            children[index].style.display = \\\"block\\\"\\n            index = (index + 1) % children.length\\n        }\\n        announceRandom()\\n        setInterval(announceRandom, timeInterval\\n        )\\n    }\\n}\",\n            \"type\": \"function\"\n        },\n        {\n            \"chunk_id\": 471,\n            \"doc_id\": 4,\n            \"chunk_parent_id\": 467,\n            \"start_byte\": 5592,\n            \"end_byte\": 6592,\n            \"signature\": \"function handleSponsorImages()\",\n            \"docs\": \"## handleSponsorImages\\n### Description\\nThis function appears to handle loading images within the 'announce-right' element and shows random announcements once all images are loaded.\\n\\n### Behavior\\n1. Retrieves the `announce-right` element from the DOM.\\n2. If the `announce-right` element does not exist, the function returns early.\\n3. Selects all elements with the class `sponsor-image`.\\n4. Creates an array of promises for each image, resolving when the image loads successfully or rejecting if there is an error.\\n5. Waits for all image promises to resolve using `Promise.all`.\\n6. Once all images are loaded, sets the `display` style of the `announce-right` element to `block` and calls `showRandomAnnouncement` with the ID `'announce-right'` and a timeout of `10000` milliseconds.\\n7. If any image fails to load, no action is taken.\\n\\n### Edge Cases\\n- If the `announce-right` element does not exist, the function will exit immediately without attempting to load images or display announcements.\\n- If any image fails to load, the promise for that image will be rejected, but no further action will be taken.\\n\\n### Errors\\n- The function does not throw errors; it catches any errors that occur during the image loading process but does not handle them further.\",\n            \"code\": \"function handleSponsorImages() {\\n    const announceRight = document.getElementById('announce-right');\\n    if(!announceRight) return;\\n\\n    const sponsorImages = document.querySelectorAll('.sponsor-image');\\n\\n    const imagePromises = Array.from(sponsorImages).map(img => {\\n        return new Promise((resolve, reject) => {\\n            if (img.complete && img.naturalHeight !== 0) {\\n                resolve();\\n            } else {\\n                img.addEventListener('load', () => {\\n                    if (img.naturalHeight !== 0) {\\n                        resolve();\\n                    } else {\\n                        reject();\\n                    }\\n                });\\n                img.addEventListener('error', reject);\\n            }\\n        });\\n    });\\n\\n    Promise.all(imagePromises)\\n        .then(() => {\\n            announceRight.style.display = 'block';\\n            showRandomAnnouncement('announce-right', 10000);\\n        })\\n        .catch(() => {\\n            // do nothing\\n        });\\n}\",\n            \"type\": \"function\"\n        },\n        {\n            \"chunk_id\": 472,\n            \"doc_id\": 5,\n            \"chunk_parent_id\": 467,\n            \"start_byte\": 6594,\n            \"end_byte\": 6717,\n            \"signature\": \"async function main()\",\n            \"docs\": \"## main\\n\\n### Description\\nMain function that initializes Termynal, displays a random announcement, and processes sponsor images.\\n\\n### Behavior\\n1. Calls `setupTermynal()` to initialize the Termynal library.\\n2. Calls `showRandomAnnouncement('announce-left', 5000)` to display a random announcement in the element with the ID `announce-left` over a duration of 5000 milliseconds.\\n3. Calls `handleSponsorImages()` to process sponsor images.\\n\\n### Edge Cases\\n- If `setupTermynal`, `showRandomAnnouncement`, or `handleSponsorImages` fail, the execution will continue with the next function call.\\n\\n### Errors\\n- Errors thrown by `setupTermynal`, `showRandomAnnouncement`, or `handleSponsorImages` will propagate up the call stack.\",\n            \"code\": \"async function main() {\\n    setupTermynal();\\n    showRandomAnnouncement('announce-left', 5000)\\n    handleSponsorImages();\\n}\",\n            \"type\": \"function\"\n        }\n    ],\n    \"next_cursor\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "step 1 - get repo modules Copy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/documentation/{{repo_id}}/modules?cursor=22",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "documentation",
+                "{{repo_id}}",
+                "modules"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "22",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/documentation/{{repo_id}}/modules?cursor=22",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "documentation",
+                    "{{repo_id}}",
+                    "modules"
+                  ],
+                  "query": [
+                    {
+                      "key": "cursor",
+                      "value": "22"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "",
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sun, 01 Mar 2026 13:02:28 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "1709"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [
+                {
+                  "expires": "Invalid Date",
+                  "domain": "",
+                  "path": ""
+                }
+              ],
+              "body": "{\n    \"data\": [\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/advanced/security\",\n            \"id\": 23\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/css\",\n            \"id\": 24\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/deployment\",\n            \"id\": 25\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/how-to\",\n            \"id\": 26\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js\",\n            \"id\": 27\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/learn\",\n            \"id\": 28\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference\",\n            \"id\": 29\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference/openapi\",\n            \"id\": 30\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference/security\",\n            \"id\": 31\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/resources\",\n            \"id\": 32\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial\",\n            \"id\": 33\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial/dependencies\",\n            \"id\": 34\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial/security\",\n            \"id\": 35\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en\",\n            \"id\": 36\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/overrides\",\n            \"id\": 37\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/overrides/partials\",\n            \"id\": 38\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs\",\n            \"id\": 39\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/about\",\n            \"id\": 40\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/advanced\",\n            \"id\": 41\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/advanced/security\",\n            \"id\": 42\n        }\n    ],\n    \"next_cursor\": 43\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
