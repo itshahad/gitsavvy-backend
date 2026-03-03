@@ -16,6 +16,8 @@ def normalize_repo_path(zip_entry: str) -> str:
     p = PurePosixPath(zip_entry)
     if len(p.parts) > 1:
         p = PurePosixPath(*p.parts[1:])
+    else:
+        return "root"
 
     return str(p)
 
