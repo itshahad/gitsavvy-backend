@@ -1,7 +1,7 @@
 pip freeze > src/requirements.txt
 fastapi dev src/main.py
 celery -A src.worker:worker purge -f
-chmod +x postgres/restore.sh
+chmod +x postgres/01-restore.sh
 
 <!-- DUMP DB -->
 pg_dump -U gitsavvy -d gitsavvy_db -F c -f /tmp/backup.dump
