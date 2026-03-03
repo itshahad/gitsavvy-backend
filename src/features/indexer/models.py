@@ -42,7 +42,7 @@ class ChunkType(Enum):
 class Module(BaseModel):
     __tablename__ = "module"
 
-    __table_args__ = (UniqueConstraint("repository_id", "path"),)
+    __table_args__ = (UniqueConstraint("repository_id", "module_parent_id", "path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -53,6 +53,16 @@ class Module(BaseModel):
 
     files: Mapped[List["File"]] = relationship(
         back_populates="module", cascade="all, delete-orphan"
+    )
+
+    module_parent_id: Mapped[int] = mapped_column(
+        ForeignKey("module.id"), nullable=True
+    )
+    module_parent: Mapped["Module"] = relationship(
+        back_populates="children_modules", remote_side=[id]
+    )
+    children_modules: Mapped[List["Module"]] = relationship(
+        back_populates="module_parent", cascade="all, delete-orphan"
     )
 
     def __repr__(self):

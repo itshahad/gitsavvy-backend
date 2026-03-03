@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Generator
 from sqlalchemy.orm import Session
 from sqlalchemy import case, or_, select
@@ -24,8 +25,8 @@ from src.features.documentation_generator.utils import (
 )
 from src.features.indexer.models import Chunk, Module, ChunkType, File
 from src.features.indexer.constants import AST_LANG_EXT
-from src.features.indexer.router import FileRead, Path, get_file_complete_path
-from src.features.indexer.schemas import ChunkRead, ModuleRead, RepoRead
+from src.features.indexer.router import get_file_complete_path
+from src.features.indexer.schemas import ChunkRead, FileRead, ModuleRead, RepoRead
 from src.features.indexer.service import normalize_repo_path
 from src.models_loader import OutlineType, Repository
 

@@ -112,7 +112,6 @@ class RepoService:
         is_commit: bool = False,
     ):  # 200KB per file
         try:
-            modules: list[ModuleRead] = []
             selected_files: list[FileRead] = []
             extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
 
@@ -126,25 +125,31 @@ class RepoService:
                         and not is_binary(zip, info)
                         and is_selected(info.filename)
                     ):
-                        module_name = module_from_path(info.filename)
-                        module = self.get_or_create_module(
-                            repo_id=repo_id, module=module_name
-                        )
-                        if module is not None:
-                            modules.append(module)
+
+                        path = Path(info.filename)
+                        parents = path.parts[:-1]
+                        parent: ModuleRead | None = None
+                        for part in parents:
+                            module = self.get_or_create_module(
+                                repo_id=repo_id,
+                                module=part,
+                                parent_id=parent.id if parent else None,
+                            )
+                            parent = module
+
                         zip.extract(info.filename, extract_dir)
                         file = self.store_file_to_db(
                             repo_id,
                             commit_sha,
                             zip,
                             info,
-                            module.id if module else None,
+                            parent.id if parent else None,
                         )
                         selected_files.append(file)
 
                 if is_commit:
                     self.db_session.commit()
-            return modules, selected_files
+            return selected_files
 
         except (BadZipFile, LargeZipFile) as e:
             raise ExternalServiceError(
@@ -190,21 +195,51 @@ class RepoService:
                 raise
             return FileRead.model_validate(file_from_db)
 
-    cashed_modules: dict[str, ModuleRead] = {}
+    cashed_modules: dict[tuple[int | None, str], ModuleRead] = {}
+    cached_modules_by_id: dict[int, ModuleRead] = {}
 
-    def get_or_create_module(self, repo_id: int, module: str | None):
+    def get_or_create_module(
+        self,
+        repo_id: int,
+        module: str | None,
+        parent_id: int | None = None,
+    ):
         if module is None:
             return None
 
-        if module not in self.cashed_modules:
-            data = ModuleCreate(repository_id=repo_id, path=module)
+        key = (parent_id, module)
+
+        if key not in self.cashed_modules:
+            data = ModuleCreate(
+                repository_id=repo_id,
+                path=module,
+                module_parent_id=parent_id,
+            )
             module_db = Module(**data.model_dump())
             self.db_session.add(module_db)
             self.db_session.flush()
             self.db_session.refresh(module_db)
-            self.cashed_modules[module] = ModuleRead.model_validate(module_db)
+            module_read = ModuleRead.model_validate(module_db)
+            self.cashed_modules[key] = ModuleRead.model_validate(module_db)
+            self.cached_modules_by_id[module_read.id] = module_read
 
-        return self.cashed_modules[module]
+        return self.cashed_modules[key]
+
+    def get_module_by_id(self, module_id: int | None) -> ModuleRead | None:
+        if module_id is None:
+            return None
+
+        cached = self.cached_modules_by_id.get(module_id)
+        if cached is not None:
+            return cached
+
+        module_db = self.db_session.get(Module, module_id)
+        if module_db is None:
+            return None
+
+        module_read = ModuleRead.model_validate(module_db)
+        self.cached_modules_by_id[module_id] = module_read
+        return module_read
 
 
 # ==================================================================================================
@@ -635,13 +670,11 @@ Context: {module.path}{signature_line}{content_line}
         self, zip_file_path: Path, commit_sha: str, is_commit: bool = False
     ):
         chunks: list[ChunkRead] = []
-        modules, selected_files = self.repo_service.select_repo_files(
+        selected_files = self.repo_service.select_repo_files(
             self.repo_id, zip_file_path, self.repo_name, commit_sha
         )
-        modules_by_id = {m.id: m for m in modules}
-
         for file in selected_files:
-            module = modules_by_id.get(file.module_id)
+            module = self.repo_service.get_module_by_id(module_id=file.module_id)
             if module is None:
                 raise ValueError(f"No module found for this file {file.file_path}")
 

@@ -55,6 +55,7 @@ class RepoRead(RepositoryMetadataModel):
 class ModuleModel(BaseModel):
     repository_id: int
     path: str
+    module_parent_id: int | None = None
 
 
 class ModuleCreate(ModuleModel):
