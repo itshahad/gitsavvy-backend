@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, Enum as SqlEnum, UniqueConstraint
+from sqlalchemy import ForeignKey, Enum as SqlEnum
 from typing import TYPE_CHECKING, List
 from enum import Enum
 from src.models import BaseModel
@@ -9,6 +8,7 @@ from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy.dialects.postgresql import JSONB
 
 if TYPE_CHECKING:
+    from src.features.repositories.models import File
     from src.features.documentation_generator.models import Documentation
     from src.features.repositories.models import Repository
 
@@ -29,7 +29,6 @@ class Outline:
 
 
 class ChunkType(Enum):
-    # FUNCTION_INNER_BLOCK = "function_inner_block"
     FUNCTION = "function"
     CLASS_SUMMARY = "class_summary"
     FILE_SUMMARY = "file_summary"
@@ -37,67 +36,6 @@ class ChunkType(Enum):
 
 
 # ====================================================================
-
-
-class Module(BaseModel):
-    __tablename__ = "module"
-
-    __table_args__ = (UniqueConstraint("repository_id", "module_parent_id", "path"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="modules")
-
-    path: Mapped[str]
-
-    files: Mapped[List["File"]] = relationship(
-        back_populates="module", cascade="all, delete-orphan"
-    )
-
-    module_parent_id: Mapped[int] = mapped_column(
-        ForeignKey("module.id"), nullable=True
-    )
-    module_parent: Mapped["Module"] = relationship(
-        back_populates="children_modules", remote_side=[id]
-    )
-    children_modules: Mapped[List["Module"]] = relationship(
-        back_populates="module_parent", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, path={self.path!r})"
-
-
-# --------------------------------------------------------------
-
-
-class File(BaseModel):
-    __tablename__ = "file"
-
-    __table_args__ = (UniqueConstraint("repository_id", "file_path", name="uq_file"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="files")
-
-    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))
-    module: Mapped["Module"] = relationship(back_populates="files")
-
-    commit_sha: Mapped[str]
-    file_path: Mapped[str]
-    content_hash: Mapped[str] = mapped_column(nullable=True)
-
-    chunks: Mapped[List["Chunk"]] = relationship(
-        back_populates="file", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
-
-
-# --------------------------------------------------------------
 
 
 class Chunk(BaseModel):
@@ -157,18 +95,3 @@ class ChunkEmbedding(BaseModel):
 
 
 # --------------------------------------------------------------
-
-
-class RepositoryTopic(BaseModel):
-    __tablename__ = "repository_topic"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="topics")
-
-    # UserId
-    topic: Mapped[str]
-
-    def __repr__(self):
-        return f"RepositoryTopic(id={self.id!r}, repository_id={self.repository_id!r}, topic={self.topic!r})"

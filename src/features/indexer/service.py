@@ -1,7 +1,6 @@
 from typing import Any
-import requests
 from pathlib import Path
-from zipfile import ZipFile, BadZipFile, LargeZipFile
+from sqlalchemy import select
 from tree_sitter_language_pack import get_parser
 from src.features.indexer.constants import *
 from src.features.indexer.config import *
@@ -11,254 +10,36 @@ from src.features.indexer.schemas import *
 from src.features.indexer.models import *
 from src.features.indexer.exceptions import *
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from src.exceptions import ExternalServiceError, StorageError
-from sqlalchemy.exc import IntegrityError
+from src.exceptions import StorageError
 from src.config import (
     MAX_BYTES_NUM,
     MIN_TAIL_BYTES,
     OVERLAPPING_BYTES_NUM,
 )
+from src.features.repositories.constants import AST_LANG_EXT, TEXT_LANG_EXT
+from src.features.repositories.models import Module, File
+from src.features.repositories.schemas import FileRead, ModuleRead
+from src.features.repositories.utils import ext
 
 
 # ==================================================================================================
 # Github:
-class RepoService:
-    def __init__(
-        self, db_session: Session, http_session: requests.Session, repo_name: str
-    ) -> None:
-        self.db_session = db_session
-        self.http_session = http_session
-        self.repo_path = get_repo_path(repo_name=repo_name)
-
-    def get_repo_metadata(self, owner: str, repo_name: str, is_commit: bool = False):
-        try:
-            r = self.http_session.get(
-                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers()
-            )
-            r.raise_for_status()
-            repo_metadata = RepoCreate.model_validate(r.json())
-            repo_data = Repository(
-                **repo_metadata.model_dump(
-                    exclude={"topics", "url", "avatar_url", "language"}
-                ),
-                url=str(repo_metadata.url),
-                avatar_url=(
-                    str(repo_metadata.avatar_url) if repo_metadata.avatar_url else None
-                ),
-            )
-
-            self.db_session.add(repo_data)
-            self.db_session.flush()  # to get an id
-            self.db_session.add_all(
-                [
-                    RepositoryTopic(repository_id=repo_data.id, topic=t)
-                    for t in repo_metadata.topics
-                ]
-            )
-            self.db_session.refresh(repo_data)
-
-            if is_commit:
-                self.db_session.commit()
-
-            return RepoRead.model_validate(repo_data)
-
-        except IntegrityError as e:
-            self.db_session.rollback()
-            stmt = select(Repository).where(
-                Repository.owner == owner, Repository.name == repo_name
-            )
-            repo_from_db = get_item_from_db(self.db_session, stmt)
-            if repo_from_db is None:
-                raise
-            return RepoRead.model_validate(repo_from_db)
-
-        except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
-
-    def download_repo(self, owner: str, repo_name: str) -> tuple[str, str]:
-        try:
-            commits = self.http_session.get(
-                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits", headers=headers()
-            )
-            commits.raise_for_status()
-            latest_commit: str = commits.json()[0]["sha"]
-
-            self.repo_path.parent.mkdir(parents=True, exist_ok=True)
-            r = self.http_session.get(
-                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/zipball/{latest_commit}",
-                headers=headers(),
-            )
-            r.raise_for_status()
-            with open(self.repo_path, mode="wb") as file:
-                file.write(r.content)
-
-            return str(self.repo_path), latest_commit
-        except (PermissionError, FileNotFoundError, OSError) as e:
-            msg = str(e) or "Storage write failed"
-            raise StorageError(message=msg) from e
-        except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
-
-    # file selection: -----------------------------------------------------------------------------
-
-    def select_repo_files(
-        self,
-        repo_id: int,
-        zip_file_path: Path,
-        repo_name: str,
-        commit_sha: str,
-        max_size: int = 200_000,
-        is_commit: bool = False,
-    ):  # 200KB per file
-        try:
-            selected_files: list[FileRead] = []
-            extract_dir = Path(f"{REPOS_PATH}/{repo_name}")
-
-            with ZipFile(zip_file_path, "r") as zip:
-                for info in zip.infolist():
-                    if info.is_dir() or info.file_size > max_size:
-                        continue
-
-                    if (
-                        not is_skipped(info.filename)
-                        and not is_binary(zip, info)
-                        and is_selected(info.filename)
-                    ):
-
-                        path = Path(info.filename)
-                        parents = path.parts[:-1]
-                        parent: ModuleRead | None = None
-                        for part in parents:
-                            module = self.get_or_create_module(
-                                repo_id=repo_id,
-                                module=part,
-                                parent_id=parent.id if parent else None,
-                            )
-                            parent = module
-
-                        zip.extract(info.filename, extract_dir)
-                        file = self.store_file_to_db(
-                            repo_id,
-                            commit_sha,
-                            zip,
-                            info,
-                            parent.id if parent else None,
-                        )
-                        selected_files.append(file)
-
-                if is_commit:
-                    self.db_session.commit()
-            return selected_files
-
-        except (BadZipFile, LargeZipFile) as e:
-            raise ExternalServiceError(
-                service="ZIP", message="invalid zip archive"
-            ) from e
-
-        except (PermissionError, FileNotFoundError, OSError) as e:
-            msg = str(e) or "Storage read failed"
-            raise StorageError(message=msg) from e
-
-    def store_file_to_db(
-        self,
-        repo_id: int,
-        commit_sha: str,
-        zip_file: ZipFile,
-        info: ZipInfo,
-        module_id: int | None,
-    ):
-        content_hash = hash_file_content(zip_file, info)
-        data: dict[str, str | int | None] = {
-            "repository_id": repo_id,
-            "commit_sha": commit_sha,
-            "file_path": info.filename,
-            "content_hash": content_hash,
-            "module_id": module_id,
-        }
-        try:
-            file_data = FileCreate.model_validate(data)
-            file_db = File(**file_data.model_dump())
-            self.db_session.add(file_db)
-            self.db_session.flush()
-            self.db_session.refresh(file_db)
-            return FileRead.model_validate(file_db)
-        except IntegrityError:
-            self.db_session.rollback()
-            stmt = select(File).where(
-                File.repository_id == data["repository_id"],
-                File.commit_sha == data["commit_sha"],
-                File.file_path == data["file_path"],
-            )
-            file_from_db = get_item_from_db(self.db_session, stmt)
-            if file_from_db is None:
-                raise
-            return FileRead.model_validate(file_from_db)
-
-    cashed_modules: dict[tuple[int | None, str], ModuleRead] = {}
-    cached_modules_by_id: dict[int, ModuleRead] = {}
-
-    def get_or_create_module(
-        self,
-        repo_id: int,
-        module: str | None,
-        parent_id: int | None = None,
-    ):
-        if module is None:
-            return None
-
-        key = (parent_id, module)
-
-        if key not in self.cashed_modules:
-            data = ModuleCreate(
-                repository_id=repo_id,
-                path=module,
-                module_parent_id=parent_id,
-            )
-            module_db = Module(**data.model_dump())
-            self.db_session.add(module_db)
-            self.db_session.flush()
-            self.db_session.refresh(module_db)
-            module_read = ModuleRead.model_validate(module_db)
-            self.cashed_modules[key] = ModuleRead.model_validate(module_db)
-            self.cached_modules_by_id[module_read.id] = module_read
-
-        return self.cashed_modules[key]
-
-    def get_module_by_id(self, module_id: int | None) -> ModuleRead | None:
-        if module_id is None:
-            return None
-
-        cached = self.cached_modules_by_id.get(module_id)
-        if cached is not None:
-            return cached
-
-        module_db = self.db_session.get(Module, module_id)
-        if module_db is None:
-            return None
-
-        module_read = ModuleRead.model_validate(module_db)
-        self.cached_modules_by_id[module_id] = module_read
-        return module_read
-
-
-# ==================================================================================================
 
 
 class ChunkingService:
     def __init__(
         self,
-        repo_service: RepoService,
         embedding_service: "EmbeddingService",
         db_session: Session,
         repo_id: int,
         repo_name: str,
     ) -> None:
-        self.repo_service = repo_service
         self.db_session = db_session
         self.repo_id = repo_id
         self.repo_name = repo_name
         self.embedding_service = embedding_service
+
+    cached_modules_by_id: dict[int, ModuleRead] = {}
 
     def create_chunk_embedding_text(
         self,
@@ -666,15 +447,37 @@ Context: {module.path}{signature_line}{content_line}
         self.db_session.refresh(chunk_db)
         return chunk_db
 
+    def get_module_by_id(self, module_id: int | None) -> ModuleRead | None:
+        if module_id is None:
+            return None
+
+        cached = self.cached_modules_by_id.get(module_id)
+        if cached is not None:
+            return cached
+
+        module_db = self.db_session.get(Module, module_id)
+        if module_db is None:
+            return None
+
+        module_read = ModuleRead.model_validate(module_db)
+        self.cached_modules_by_id[module_id] = module_read
+        return module_read
+
+    def get_selected_files(self, repo_id: int):
+        stmt = select(File).where(File.repository_id == repo_id).order_by(File.id)
+        files = self.db_session.execute(stmt).scalars().all()
+
+        return [FileRead.model_validate(file) for file in files]
+
     def chunk_repo_files(
-        self, zip_file_path: Path, commit_sha: str, is_commit: bool = False
+        self,
+        selected_files: list[FileRead],
+        is_commit: bool = False,
     ):
         chunks: list[ChunkRead] = []
-        selected_files = self.repo_service.select_repo_files(
-            self.repo_id, zip_file_path, self.repo_name, commit_sha
-        )
+
         for file in selected_files:
-            module = self.repo_service.get_module_by_id(module_id=file.module_id)
+            module = self.get_module_by_id(module_id=file.module_id)
             if module is None:
                 raise ValueError(f"No module found for this file {file.file_path}")
 
