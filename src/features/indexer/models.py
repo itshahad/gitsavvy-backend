@@ -60,7 +60,11 @@ class Chunk(BaseModel):
     start_byte: Mapped[int] = mapped_column(nullable=True)
     end_byte: Mapped[int] = mapped_column(nullable=True)
     type: Mapped["ChunkType"] = mapped_column(SqlEnum(ChunkType))
-    content_text: Mapped[str]
+
+    signature: Mapped["str"] = mapped_column(nullable=True)
+    language: Mapped["str"] = mapped_column(nullable=True)
+
+    content: Mapped[str]
     content_json: Mapped[list[dict[str, int | str]]] = mapped_column(
         JSONB, nullable=True
     )
@@ -75,7 +79,7 @@ class Chunk(BaseModel):
     )
 
     def __repr__(self):
-        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_byte={self.start_byte!r}, end_byte={self.end_byte!r}, type={self.type!r}, content_text={self.content_text!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
+        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_byte={self.start_byte!r}, end_byte={self.end_byte!r}, type={self.type!r}, content={self.content!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
 
 
 # --------------------------------------------------------------

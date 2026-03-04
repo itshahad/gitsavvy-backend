@@ -14,9 +14,11 @@ class ChunkModel(BaseModel):
     start_byte: int | None = None
     end_byte: int | None = None
     type: ChunkType
-    content_text: str
+    content: str
     content_json: list[dict[str, int | str]] | None = None
     content_text_hash: str | None = None
+    signature: str | None = None
+    language: str | None = None
 
     @field_validator("content_text_hash", mode="after")
     @classmethod

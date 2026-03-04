@@ -1,4 +1,6 @@
-# type: ignore [all]
+# type: ignore[all]
+import time
+
 from typing import Any, Generator
 
 
@@ -8,13 +10,13 @@ import threading
 from typing import TYPE_CHECKING
 
 from src.features.documentation_generator.constants import SYSTEM_PROMPT
+from src.features.indexer.models import ChunkType
 from src.features.documentation_generator.utils import split_huge_text
 
 if TYPE_CHECKING:
     from transformers import (
         PreTrainedTokenizerBase,
         PreTrainedModel,
-        TextIteratorStreamer,
     )
 
 
@@ -75,19 +77,28 @@ def get_llm_tokenizer() -> "PreTrainedTokenizerBase":
 
 # =======================================================================================
 def create_prompt(
+    chunk_type: ChunkType,
+    file_path: str,
+    signature: str | None = None,
+    lang: str | None = None,
     content: str | None = None,
-    file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
 ):
-    USER_PROMPT = f"""
-Generate documentation for the following content.
 
-File Path: {file_path}
+    parts = [
+        f"Entity Type: {chunk_type.value}",
+        f"File Path: {file_path}",
+    ]
 
-Content:
-{content}
-"""
+    if signature:
+        parts.insert(1, f"Entity Name: {signature}")
+    if lang:
+        parts.insert(1, f"Programming Language: {lang}")
+
+    parts.append(f"\nContent:\n{content}")
+
+    USER_PROMPT = "\n".join(parts)
 
     messages = [
         {"role": "system", "content": sys_prompt if sys_prompt else SYSTEM_PROMPT},
@@ -97,8 +108,8 @@ Content:
     return messages
 
 
-CONTEXT_LIMIT = 8192
-RESERVED_OUTPUT = 1024
+CONTEXT_LIMIT = 1200
+RESERVED_OUTPUT = 384
 MAX_INPUT_TOKENS = CONTEXT_LIMIT - RESERVED_OUTPUT
 
 
@@ -139,8 +150,11 @@ def decode_generated_text(generated_ids, tokenizer):
 def generate_llm_response(
     tokenizer: Any,
     model: Any,
+    chunk_type: ChunkType,
+    file_path: str,
+    signature: str | None = None,
+    lang: str | None = None,
     content: str | None = None,
-    file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
 ) -> str:
@@ -149,6 +163,9 @@ def generate_llm_response(
         content=content,
         usr_prompt=usr_prompt,
         sys_prompt=sys_prompt,
+        signature=signature,
+        chunk_type=chunk_type,
+        lang=lang,
     )
     full_text = apply_chat_template(messages=prompt, tokenizer=tokenizer)
     print(f"full_text {full_text}")
@@ -157,8 +174,20 @@ def generate_llm_response(
         model_inputs = create_model_input(
             text=full_text, tokenizer=tokenizer, model=model
         )
+
+        t0 = time.time()
         gen_ids = generate_text(
             model=model, model_inputs=model_inputs, max_new_tokens=512
+        )
+        dt = time.time() - t0
+        out_tokens = gen_ids[0].shape[-1]
+        print(
+            "seconds:",
+            round(dt, 3),
+            "out_tokens:",
+            out_tokens,
+            "tok/s:",
+            round(out_tokens / dt, 2),
         )
         return decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
 
@@ -166,14 +195,30 @@ def generate_llm_response(
     partial_summaries: list[str] = []
 
     for part in parts:
-        part_prompt = create_prompt(file_path=file_path, content=part)
+        part_prompt = create_prompt(
+            file_path=file_path,
+            content=part,
+            usr_prompt=usr_prompt,
+            sys_prompt=sys_prompt,
+            signature=signature,
+            chunk_type=chunk_type,
+            lang=lang,
+        )
         part_text = apply_chat_template(messages=part_prompt, tokenizer=tokenizer)
         print(f"part_text {part_text}")
 
         if not safe_prompt(tokenizer, part_text):
             subparts = split_huge_text(part, max_bytes=3_000)
             for sp in subparts:
-                sp_prompt = create_prompt(file_path=file_path, content=sp)
+                sp_prompt = create_prompt(
+                    file_path=file_path,
+                    content=sp,
+                    usr_prompt=usr_prompt,
+                    sys_prompt=sys_prompt,
+                    signature=signature,
+                    chunk_type=chunk_type,
+                    lang=lang,
+                )
                 sp_text = apply_chat_template(messages=sp_prompt, tokenizer=tokenizer)
                 if not safe_prompt(tokenizer=tokenizer, text=sp_text):
                     sp_ids = tokenizer(
@@ -213,8 +258,11 @@ def generate_llm_response(
 def stream_llm_response(
     tokenizer: Any,
     model: Any,
+    chunk_type: ChunkType,
+    file_path: str,
+    signature: str | None = None,
+    lang: str | None = None,
     content: str | None = None,
-    file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
     max_new_tokens: int = 512,
@@ -229,6 +277,9 @@ def stream_llm_response(
         content=content,
         usr_prompt=usr_prompt,
         sys_prompt=sys_prompt,
+        signature=signature,
+        chunk_type=chunk_type,
+        lang=lang,
     )
     full_text = apply_chat_template(messages=prompt, tokenizer=tokenizer)
 

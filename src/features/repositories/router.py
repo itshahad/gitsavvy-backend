@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 # import requests
 from src.features.documentation_generator.tasks import docs_generator
-from src.features.indexer.tasks import index_repo
+from src.features.indexer.tasks import chunk_repo, index_repo
 from src.features.repositories.schemas import RepoRequest
 from src.features.repositories.tasks import download_repo
 
@@ -18,6 +18,7 @@ def process_repo(data: RepoRequest):
 
     chain(
         download_repo.s(repo_owner=repo_owner, repo_name=repo_name),  # type: ignore
+        chunk_repo.s(),  # type: ignore
         index_repo.s(),  # type: ignore
         docs_generator.s(),  # type: ignore
     ).apply_async()

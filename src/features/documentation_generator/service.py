@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any, Generator
 from sqlalchemy.orm import Session
 from sqlalchemy import case, or_, select
@@ -19,14 +18,10 @@ from src.features.documentation_generator.schemas import (
     DocModel,
 )
 from src.features.documentation_generator.schemas import DocRead
-from src.features.documentation_generator.utils import (
-    extract_code,
-    extract_signature,
-    parse_yaml_front_matter,
-)
+from src.features.documentation_generator.utils import parse_yaml_front_matter
 
 from src.features.indexer.schemas import ChunkRead
-from src.features.indexer.utils import get_file_complete_path, normalize_repo_path
+from src.features.indexer.utils import normalize_repo_path
 from src.features.repositories.constants import AST_LANG_EXT
 from src.features.indexer.models import Chunk
 from src.features.repositories.models import File, Module, Repository
@@ -145,8 +140,6 @@ class DocGenerateService:
                 files, desc=f"Files in module {module_read.id}", leave=False
             ):
                 file_read = FileRead.model_validate(file)
-                file_path = get_file_complete_path(file.file_path, self.repo_name)
-                file_bytes = Path(file_path).read_bytes()
 
                 file_chunk = next(
                     self.get_file_chunks(file=file_read, type=ChunkType.FILE_SUMMARY),
@@ -157,13 +150,12 @@ class DocGenerateService:
                     continue
 
                 children_docs = self.generate_children_chunks_docs(
-                    file=file_read, src=file_bytes, chunk_parent_id=file_chunk.id
+                    file=file_read, chunk_parent_id=file_chunk.id
                 )
 
                 file_chunk_doc = self.generate_chunk_docs(
                     chunk=file_chunk,
                     file=file_read,
-                    src=file_bytes,
                     children_docs=children_docs,
                 )
 
@@ -171,18 +163,15 @@ class DocGenerateService:
             self.session.commit()
         return files_doc
 
-    def generate_children_chunks_docs(
-        self, file: FileRead, src: bytes, chunk_parent_id: int
-    ):
+    def generate_children_chunks_docs(self, file: FileRead, chunk_parent_id: int):
         docs: dict[int, DocRead] = {}
         for chunk in self.get_file_chunks(file=file, chunk_parent_id=chunk_parent_id):
 
             children_docs = self.generate_children_chunks_docs(
-                file=file, src=src, chunk_parent_id=chunk.id
+                file=file, chunk_parent_id=chunk.id
             )
 
             docs[chunk.start_byte] = self.generate_chunk_docs(
-                src=src,
                 chunk=chunk,
                 children_docs=children_docs,
                 file=file,
@@ -191,7 +180,6 @@ class DocGenerateService:
 
     def generate_chunk_docs(
         self,
-        src: bytes,
         chunk: Chunk,
         file: FileRead,
         children_docs: dict[int, DocRead],
@@ -199,12 +187,15 @@ class DocGenerateService:
         content = chunk.content_json
 
         text = self.build_text_from_ranges(
-            src=src, ranges=content, children_docs=children_docs
+            chunk=chunk, ranges=content, children_docs=children_docs
         )
 
         doc = generate_llm_response(
             file_path=normalize_repo_path(file.file_path),
+            chunk_type=chunk.type,
             content=text,
+            lang=chunk.language,
+            signature=chunk.signature,
             tokenizer=self.tokenizer,
             model=self.model,
         )
@@ -221,16 +212,14 @@ class DocGenerateService:
 
     def build_text_from_ranges(
         self,
-        src: bytes,
+        chunk: Chunk,
         ranges: list[dict[str, Any]],
         children_docs: dict[int, DocRead],
     ) -> str:
         parts: list[str] = []
 
-        if len(ranges) == 1 and ranges[0].get("type") == OutlineType.Function.value:
-            start = int(ranges[0]["start_byte"])
-            end = int(ranges[0]["end_byte"])
-            return src[start:end].decode("utf-8", errors="replace")
+        if OutlineType.Function.value:
+            return chunk.content
 
         for r in ranges:
             content = r["content"]
@@ -372,15 +361,13 @@ class DocService:
             for chunk, doc in rows:
                 chunk_model = ChunkRead.model_validate(chunk)
                 doc_model = DocRead.model_validate(doc)
-                code = extract_code(chunk_model.content_text)
-                signature = extract_signature(chunk_model.content_text)
                 doc_chunk = DocModel(
                     chunk_id=chunk_model.id,
                     doc_id=doc_model.id,
-                    code=code,
+                    code=chunk_model.content,
                     docs=doc_model.detailed_doc,
                     type=chunk_model.type,
-                    signature=signature if signature != "" else None,
+                    signature=chunk_model.signature,
                     chunk_parent_id=chunk_model.chunk_parent_id,
                     start_byte=chunk_model.start_byte,
                     end_byte=chunk_model.end_byte,
