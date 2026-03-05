@@ -29,4 +29,4 @@ WINDOW_TOKENS = int(os.getenv("WINDOW_TOKENS", 512))
 OVERLAP_TOKENS = int(os.getenv("OVERLAP_TOKENS", 64))
 MIN_LAST_WINDOW_TOKENS = int(os.getenv("MIN_LAST_WINDOW_TOKENS", 64))
 # LLM Model ==========================================================================
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-Coder-7B-Instruct")
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-Coder-3B-Instruct")

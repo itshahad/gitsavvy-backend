@@ -35,6 +35,7 @@ class RepoService:
         self.db_session = db_session
         self.http_session = http_session
         self.repo_path = get_repo_path(repo_name=repo_name)
+        self.cashed_modules: dict[tuple[int | None, str], ModuleRead] = {}
 
     def get_repo_metadata(self, owner: str, repo_name: str, is_commit: bool = False):
         try:
@@ -199,8 +200,6 @@ class RepoService:
             if file_from_db is None:
                 raise
             return FileRead.model_validate(file_from_db)
-
-    cashed_modules: dict[tuple[int | None, str], ModuleRead] = {}
 
     def get_or_create_module(
         self,

@@ -9,7 +9,7 @@ from src.features.documentation_generator.exceptions import (
     ModuleNotFound,
     RepoNotFound,
 )
-from src.core.llm import generate_llm_response  # type: ignore
+from src.core.llm import generate_llm_response, generate_llm_responses_batch  # type: ignore
 
 from src.features.documentation_generator.models import Documentation
 from src.features.documentation_generator.schemas import (
@@ -163,19 +163,81 @@ class DocGenerateService:
             self.session.commit()
         return files_doc
 
-    def generate_children_chunks_docs(self, file: FileRead, chunk_parent_id: int):
+    def generate_children_chunks_docs(
+        self, file: FileRead, chunk_parent_id: int, batch_size: int = 8
+    ):
         docs: dict[int, DocRead] = {}
-        for chunk in self.get_file_chunks(file=file, chunk_parent_id=chunk_parent_id):
 
-            children_docs = self.generate_children_chunks_docs(
-                file=file, chunk_parent_id=chunk.id
-            )
+        # get direct children first
+        children = list(
+            self.get_file_chunks(file=file, chunk_parent_id=chunk_parent_id)
+        )
+        if not children:
+            return docs
 
-            docs[chunk.start_byte] = self.generate_chunk_docs(
-                chunk=chunk,
-                children_docs=children_docs,
+        # for each child, recursively generate its children docs (this part stays)
+        child_children_docs: dict[int, dict[int, DocRead]] = {}
+        for ch in children:
+            child_children_docs[ch.id] = self.generate_children_chunks_docs(
                 file=file,
+                chunk_parent_id=ch.id,
+                batch_size=batch_size,
             )
+
+        # build prompts for all children and run ONE batched LLM call
+        requests: list[dict[str, Any]] = []
+        for ch in children:
+            content = ch.content_json
+            text = self.build_text_from_ranges(
+                chunk=ch,
+                ranges=content,
+                children_docs=child_children_docs[ch.id],
+            )
+            requests.append(
+                {
+                    "file_path": normalize_repo_path(file.file_path),
+                    "chunk_type": ch.type,
+                    "content": text,
+                    "lang": ch.language,
+                    "signature": ch.signature,
+                    "tokenizer": self.tokenizer,
+                    "model": self.model,
+                }
+            )
+
+        batch_requests = [
+            {
+                "file_path": r["file_path"],
+                "chunk_type": r["chunk_type"],
+                "content": r["content"],
+                "lang": r["lang"],
+                "signature": r["signature"],
+            }
+            for r in requests
+        ]
+
+        outputs = generate_llm_responses_batch(
+            tokenizer=self.tokenizer,
+            model=self.model,
+            requests=batch_requests,
+            batch_size=batch_size,
+            temperature=0.0,
+            top_p=0.9,
+            repetition_penalty=1.05,
+        )
+
+        # parse + store docs for each child, then return mapping by start_byte
+        for ch, doc_text in zip(children, outputs):
+            short_summary, detailed_documentation = parse_yaml_front_matter(doc_text)
+
+            stored_doc = self.store_doc_artifact(
+                chunk=ch,
+                detailed_doc=detailed_documentation,
+                short_summary=short_summary,
+            )
+
+            docs[ch.start_byte] = stored_doc
+
         return docs
 
     def generate_chunk_docs(

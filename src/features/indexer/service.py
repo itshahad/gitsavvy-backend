@@ -36,8 +36,7 @@ class ChunkingService:
         self.db_session = db_session
         self.repo_id = repo_id
         self.repo_name = repo_name
-
-    cached_modules_by_id: dict[int, ModuleRead] = {}
+        self.cached_modules_by_id: dict[int, ModuleRead] = {}
 
     # files chunking:
     def chunk_text_files(
@@ -438,8 +437,7 @@ class EmbeddingService:
         self.db_session = db_session
         self.embedder = embedder
         self.tokenizer = tokenizer
-
-    chunks: list[Chunk] = []
+        self.chunks: list[Chunk] = []
 
     def get_repo_chunks(self):
         stmt = (

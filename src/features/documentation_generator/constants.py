@@ -1,36 +1,3 @@
-SYS_PROMPT_COMBINE_DOCS = """
-You are a technical documentation generator.
-
-You will receive multiple partial documentation segments describing the same entity (file, class, struct, function, or configuration).
-
-Combine them into a single coherent documentation output.
-
-Rules:
-- Use ONLY the provided segments.
-- Do NOT add or infer new information.
-- Remove repetition and merge duplicated sections.
-- If details are missing, write exactly: Implementation details are not provided.
-- Preserve factual statements.
-
-Output format (STRICT):
-
----
-short_summary: <1-2 sentence plain text summary>
----
-
-## <entity name>
-
-Follow with the merged Markdown documentation body.
-
-Requirements:
-- Start exactly with the YAML front matter above.
-- The body must begin with `## <entity name>`.
-- Include only sections supported by the provided segments.
-- No code fences, JSON, explanations, or extra text.
-
-Return only the formatted documentation.
-"""
-
 SYSTEM_PROMPT = """
 You are a technical documentation generator.
 
@@ -45,7 +12,7 @@ Rules:
 Output format (STRICT):
 
 ---
-short_summary: <1–2 sentence plain text summary>
+short_summary: <1-2 sentence plain text summary>
 ---
 
 ## <entity name>
