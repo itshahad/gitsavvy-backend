@@ -328,10 +328,18 @@ class DocService:
             raise RepoNotFound(repo_id=repo_id)
         return RepoRead.model_validate(repo)
 
-    def get_module(self, module_id: int):
-        module = self.db.get(Module, module_id)
+    def get_module(self, repo_id: int, module_id: int | None = None):
+        if module_id:
+            module = self.db.get(Module, module_id)
+        else:
+            stmt = select(Module).where(
+                Module.repository_id == repo_id,
+                Module.module_parent_id.is_(None),
+            )
+
+            module = self.db.execute(stmt).scalar_one()
         if module is None:
-            raise ModuleNotFound(module_id=module_id)
+            raise ModuleNotFound(repo_id=repo_id, module_id=module_id)
         return ModuleRead.model_validate(module)
 
     def get_file(self, file_id: int):
@@ -340,12 +348,22 @@ class DocService:
             raise FileNotFound(file_id=file_id)
         return FileRead.model_validate(file)
 
-    def get_modules(self, repo_id: int, limit: int = 20, cursor: int | None = None):
+    def get_modules(
+        self,
+        repo_id: int,
+        limit: int = 20,
+        cursor: int | None = None,
+        module_parent_id: int | None = None,
+    ):
         try:
             self.get_repo(repo_id=repo_id)
             filters = [Module.repository_id == repo_id]
             if cursor is not None:
                 filters.append(Module.id > cursor)
+
+            if module_parent_id is not None:
+                filters.append(Module.module_parent_id == module_parent_id)
+
             stmt = select(Module).where(*filters).order_by(Module.id).limit(limit + 1)
 
             modules = self.db.execute(stmt).scalars().all()
@@ -364,9 +382,11 @@ class DocService:
         except SQLAlchemyError as e:
             raise DatabaseError from e
 
-    def get_files(self, module_id: int, limit: int = 20, cursor: int | None = None):
+    def get_files(
+        self, repo_id: int, module_id: int, limit: int = 20, cursor: int | None = None
+    ):
         try:
-            self.get_module(module_id=module_id)
+            self.get_module(repo_id=repo_id, module_id=module_id)
             filters = [File.module_id == module_id]
             if cursor is not None:
                 filters.append(File.id > cursor)

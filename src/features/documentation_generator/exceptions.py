@@ -5,8 +5,9 @@ class RepoNotFound(Exception):
 
 
 class ModuleNotFound(Exception):
-    def __init__(self, module_id: int) -> None:
+    def __init__(self, repo_id: int, module_id: int | None = None) -> None:
         super().__init__(f"Module {module_id} not found")
+        self.repo_id = repo_id
         self.module_id = module_id
 
 
