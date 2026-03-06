@@ -1,17 +1,21 @@
 from celery import chain  # type: ignore
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 # import requests
+from src.database import get_db
+from src.exceptions import DatabaseError
 from src.features.documentation_generator.tasks import docs_generator
 from src.features.indexer.tasks import IndexerResult, chunk_repo, index_repo
 from src.features.repositories.schemas import RepoRequest
+from src.features.repositories.service import ReposService
 from src.features.repositories.tasks import download_repo
 
 
-router = APIRouter(prefix="/repo")
+router = APIRouter(prefix="/repositories")
 
 
-@router.post("/process")
+@router.post("/add-repo")
 def process_repo(
     data: RepoRequest,
     repo_id: int | None = Query(None),
@@ -47,3 +51,15 @@ def process_repo(
         docs_generator.s(),  # type: ignore
     ).apply_async()
     return {"status": "queued", "mode": "full_pipeline"}
+
+
+@router.get("")
+def get_repositories(
+    db: Session = Depends(get_db),
+):
+    repos_service = ReposService(db_session=db)
+    try:
+        repos = repos_service.get_repos()
+        return {"data": repos}
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e

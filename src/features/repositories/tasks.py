@@ -2,7 +2,7 @@ from typing import TypedDict
 from celery import Task  # type: ignore
 import requests
 
-from src.features.repositories.service import RepoService
+from src.features.repositories.service import RepoProcessingService
 from src.features.repositories.utils import get_repo_path
 from src.worker import worker  # type: ignore
 from src.database import SessionLocal
@@ -24,7 +24,7 @@ def download_repo(self: Task, repo_owner: str, repo_name: str) -> DownloadRepoRe
 
     repo_path = get_repo_path(repo_name=repo_name)
 
-    repo_service = RepoService(
+    repo_service = RepoProcessingService(
         db_session=db_session, http_session=http, repo_name=repo_name
     )
 
@@ -40,7 +40,7 @@ def download_repo(self: Task, repo_owner: str, repo_name: str) -> DownloadRepoRe
         )
 
         selected_files = repo_service.select_repo_files(
-            repo_id=repo.id,
+            repo=repo,
             zip_file_path=repo_path,
             repo_name=repo_name,
             commit_sha=commit_sha,

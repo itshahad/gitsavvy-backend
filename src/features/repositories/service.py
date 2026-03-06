@@ -6,6 +6,7 @@ from sqlalchemy import select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 
+from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPOS_PATH
 from src.features.repositories.exceptions import raise_request_exception
@@ -28,7 +29,7 @@ from src.features.repositories.utils import (
 )
 
 
-class RepoService:
+class RepoProcessingService:
     def __init__(
         self, db_session: Session, http_session: requests.Session, repo_name: str
     ) -> None:
@@ -67,7 +68,7 @@ class RepoService:
             if is_commit:
                 self.db_session.commit()
 
-            return RepoRead.model_validate(repo_data)
+            return repo_data
 
         except IntegrityError as e:
             self.db_session.rollback()
@@ -77,7 +78,7 @@ class RepoService:
             repo_from_db = get_item_from_db(self.db_session, stmt)
             if repo_from_db is None:
                 raise
-            return RepoRead.model_validate(repo_from_db)
+            return repo_from_db
 
         except Exception as e:
             raise_request_exception(e=e, owner=owner, repo_name=repo_name)
@@ -110,7 +111,7 @@ class RepoService:
 
     def select_repo_files(
         self,
-        repo_id: int,
+        repo: Repository,
         zip_file_path: Path,
         repo_name: str,
         commit_sha: str,
@@ -131,13 +132,12 @@ class RepoService:
                         and not is_binary(zip, info)
                         and is_selected(info.filename)
                     ):
-
                         path = Path(info.filename)
                         parents = path.parts[:-1]
                         parent: ModuleRead | None = None
                         for part in parents:
                             module = self.get_or_create_module(
-                                repo_id=repo_id,
+                                repo_id=repo.id,
                                 module=part,
                                 parent_id=parent.id if parent else None,
                             )
@@ -145,12 +145,20 @@ class RepoService:
 
                         zip.extract(info.filename, extract_dir)
                         file = self.store_file_to_db(
-                            repo_id,
+                            repo.id,
                             commit_sha,
                             zip,
                             info,
                             parent.id if parent else None,
                         )
+
+                        if is_root_readme(zip_entry=info.filename):
+                            content = zip.read(info.filename).decode(
+                                "utf-8", errors="ignore"
+                            )
+                            repo.readme_content = content
+                            print(content)
+
                         selected_files.append(file)
 
                 if is_commit:
@@ -226,3 +234,24 @@ class RepoService:
             self.cashed_modules[key] = module_read
 
         return self.cashed_modules[key]
+
+
+class ReposService:
+    def __init__(
+        self,
+        db_session: Session,
+    ) -> None:
+        self.db_session = db_session
+
+    cached_repos: dict[int, RepoRead] = {}
+
+    def get_repos(self):
+        stmt = select(Repository).order_by(Repository.id)
+        repos = self.db_session.execute(stmt).scalars().all()
+
+        repos_list: list[RepoRead] = []
+        for repo in repos:
+            repo_read = RepoRead.model_validate(repo)
+            repos_list.append(repo_read)
+            self.cached_repos[repo.id] = repo_read
+        return repos_list

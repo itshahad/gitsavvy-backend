@@ -16,6 +16,14 @@ def normalize_repo_path(zip_entry: str) -> str:
     return str(p)
 
 
+def is_root_readme(zip_entry: str) -> bool:
+    p = PurePosixPath(zip_entry)
+    if len(p.parts) != 2:
+        return False
+
+    return p.name.lower() in {"readme.md", "readme.rst", "readme.txt", "readme"}
+
+
 def module_from_path(path: str):
     # zipfile/parent_dir/file.ext
     parent = PurePosixPath(path).parent

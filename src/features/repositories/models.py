@@ -4,6 +4,7 @@ from src.models import BaseModel
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey, String, UniqueConstraint
 
+
 if TYPE_CHECKING:
     from src.features.indexer.models import Chunk
 
@@ -39,6 +40,8 @@ class Repository(BaseModel):
         back_populates="repository", cascade="all, delete-orphan"
     )
 
+    readme_content: Mapped[str] = mapped_column(nullable=True)
+
     def __repr__(self):
         return f"Repository(id={self.id!r}, owner={self.owner!r}, name={self.name!r}, description={self.description!r}, url={self.url!r}, forks_count={self.forks_count!r}, open_issues_count={self.open_issues_count!r}, default_branch={self.default_branch!r}, avatar_url={self.avatar_url!r})"
 
@@ -51,7 +54,9 @@ class RepositoryTopic(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
     repository: Mapped["Repository"] = relationship(back_populates="topics")
 
     # UserId
@@ -71,7 +76,9 @@ class Module(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
     repository: Mapped["Repository"] = relationship(back_populates="modules")
 
     path: Mapped[str]
@@ -104,7 +111,9 @@ class File(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
     repository: Mapped["Repository"] = relationship(back_populates="files")
 
     module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))

@@ -46,7 +46,9 @@ class Chunk(BaseModel):
     file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))
     file: Mapped["File"] = relationship(back_populates="chunks")
 
-    repo_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repo_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
     repository: Mapped["Repository"] = relationship(back_populates="chunks")
 
     chunk_parent_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), nullable=True)

@@ -34,6 +34,7 @@ class RepositoryMetadataModel(BaseModel):
     avatar_url: HttpUrl | None = Field(
         default=None, validation_alias=AliasPath("organization", "avatar_url")
     )
+    readme_content: str | None = None
 
 
 class RepoCreate(RepositoryMetadataModel):
