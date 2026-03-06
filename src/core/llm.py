@@ -1,6 +1,7 @@
 # type: ignore [all]
 from typing import Any, Generator
 import threading
+import gc
 from typing import TYPE_CHECKING
 
 from src.config import LLM_MODEL_NAME, HF_HOME
@@ -18,6 +19,31 @@ _MODEL: Any = None
 _MODEL_LOCK = threading.Lock()
 _TOKENIZER = None
 _TOKENIZER_LOCK = threading.Lock()
+
+
+def _cleanup_cuda() -> None:
+    try:
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _print_cuda_mem(prefix: str = "") -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**2
+            reserved = torch.cuda.memory_reserved() / 1024**2
+            print(
+                f"{prefix} CUDA allocated={allocated:.1f} MiB reserved={reserved:.1f} MiB"
+            )
+    except Exception:
+        pass
 
 
 def get_llm_model() -> "PreTrainedModel":
@@ -88,6 +114,17 @@ def get_llm_tokenizer() -> "PreTrainedTokenizerBase":
                 trust_remote_code=True,
                 cache_dir=HF_HOME,
             )
+
+            # IMPORTANT for decoder-only generation with padding
+            _TOKENIZER.padding_side = "left"
+
+            if _TOKENIZER.pad_token is None:
+                _TOKENIZER.pad_token = _TOKENIZER.eos_token
+
+            print("TOKENIZER padding_side =", _TOKENIZER.padding_side)
+            print("TOKENIZER pad_token_id =", _TOKENIZER.pad_token_id)
+            print("TOKENIZER eos_token_id =", _TOKENIZER.eos_token_id)
+
         return _TOKENIZER
 
 
@@ -114,11 +151,11 @@ def create_prompt(
 
     parts.append(f"\nContent:\n{content}")
 
-    USER_PROMPT = "\n".join(parts)
+    user_prompt = "\n".join(parts)
 
     messages = [
         {"role": "system", "content": sys_prompt if sys_prompt else SYSTEM_PROMPT},
-        {"role": "user", "content": usr_prompt if usr_prompt else USER_PROMPT},
+        {"role": "user", "content": usr_prompt if usr_prompt else user_prompt},
     ]
 
     return messages
@@ -176,7 +213,7 @@ def generate_text(
     model_inputs,
     model,
     tokenizer=None,
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 128,
     temperature: float = 0.0,
     top_p: float = 0.9,
     repetition_penalty: float = 1.05,
@@ -188,11 +225,13 @@ def generate_text(
         max_new_tokens=max_new_tokens,
         use_cache=True,
         do_sample=(temperature > 0),
-        temperature=temperature if temperature > 0 else None,
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         num_beams=1,
     )
+
+    if temperature > 0:
+        gen_kwargs["temperature"] = temperature
 
     if tokenizer is not None:
         if getattr(model.generation_config, "pad_token_id", None) is None:
@@ -203,20 +242,24 @@ def generate_text(
         gen_kwargs["pad_token_id"] = model.generation_config.pad_token_id
 
     with torch.inference_mode():
-        generated_ids = model.generate(**gen_kwargs)
+        out = model.generate(**gen_kwargs)
 
-    generated_ids = [
-        out_ids[in_ids.shape[-1] :]
-        for in_ids, out_ids in zip(model_inputs["input_ids"], generated_ids)
-    ]
-    return generated_ids
+    input_width = model_inputs["input_ids"].shape[1]
+    result = [out_row[input_width:] for out_row in out]
+
+    del out
+    del gen_kwargs
+    del model_inputs
+    _cleanup_cuda()
+
+    return result
 
 
 def generate_text_batch(
     model_inputs,
     model,
     tokenizer,
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 128,
     temperature: float = 0.0,
     top_p: float = 0.9,
     repetition_penalty: float = 1.05,
@@ -225,42 +268,62 @@ def generate_text_batch(
     Returns list[str] outputs aligned with the batch order.
     """
     import torch
+    import time
 
-    # Ensure pad token configured
     if getattr(model.generation_config, "pad_token_id", None) is None:
         try:
             model.generation_config.pad_token_id = tokenizer.eos_token_id
         except Exception:
             pass
 
+    lengths = model_inputs["attention_mask"].sum(dim=1).tolist()
+    print("batch prompt lengths:", lengths)
+    print("batch size:", len(lengths))
+    print("batch max len:", max(lengths) if lengths else 0)
+    print("batch min len:", min(lengths) if lengths else 0)
+    print("max_new_tokens:", max_new_tokens)
+    _print_cuda_mem("[BEFORE GENERATE]")
+
     gen_kwargs = dict(
         **model_inputs,
         max_new_tokens=max_new_tokens,
         use_cache=True,
         do_sample=(temperature > 0),
-        temperature=temperature if temperature > 0 else None,
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         num_beams=1,
         pad_token_id=model.generation_config.pad_token_id,
     )
 
+    if temperature > 0:
+        gen_kwargs["temperature"] = temperature
+
+    start = time.perf_counter()
     with torch.inference_mode():
         out = model.generate(**gen_kwargs)
+    print(f"generate_text_batch took {time.perf_counter() - start:.2f}s")
 
-    # Decode only the continuation per row using the true input length
-    # input length = number of non-pad tokens (attention_mask sum)
-    in_lens = model_inputs["attention_mask"].sum(dim=1).tolist()
+    # For padded batch generation, continuation starts after full padded width
+    input_width = model_inputs["input_ids"].shape[1]
+
     outputs: list[str] = []
-    for i, in_len in enumerate(in_lens):
-        gen_ids = out[i, in_len:]
+    for i in range(out.shape[0]):
+        gen_ids = out[i, input_width:]
         outputs.append(tokenizer.decode(gen_ids, skip_special_tokens=True))
+
+    del out
+    del gen_kwargs
+    del model_inputs
+    _cleanup_cuda()
+    _print_cuda_mem("[AFTER GENERATE]")
 
     return outputs
 
 
 def decode_generated_text(generated_ids, tokenizer) -> str:
-    return tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    del generated_ids
+    return text
 
 
 def generate_llm_response(
@@ -293,7 +356,7 @@ def generate_llm_response(
             model=model,
             model_inputs=model_inputs,
             tokenizer=tokenizer,
-            max_new_tokens=512,
+            max_new_tokens=128,
             temperature=0.0,
         )
         return decode_generated_text(generated_ids=gen_ids, tokenizer=tokenizer)
@@ -337,7 +400,7 @@ def generate_llm_response(
                         model=model,
                         model_inputs=sp_ids,
                         tokenizer=tokenizer,
-                        max_new_tokens=256,
+                        max_new_tokens=96,
                         temperature=0.0,
                     )
                 else:
@@ -346,7 +409,7 @@ def generate_llm_response(
                         model=model,
                         model_inputs=sp_inputs,
                         tokenizer=tokenizer,
-                        max_new_tokens=256,
+                        max_new_tokens=96,
                         temperature=0.0,
                     )
 
@@ -362,7 +425,7 @@ def generate_llm_response(
             model=model,
             model_inputs=part_inputs,
             tokenizer=tokenizer,
-            max_new_tokens=256,
+            max_new_tokens=96,
             temperature=0.0,
         )
         partial_summaries.append(
@@ -396,7 +459,7 @@ def generate_llm_response(
             model=model,
             model_inputs=merge_inputs,
             tokenizer=tokenizer,
-            max_new_tokens=512,
+            max_new_tokens=160,
             temperature=0.0,
         )
         return decode_generated_text(generated_ids=merge_ids, tokenizer=tokenizer)
@@ -408,8 +471,8 @@ def generate_llm_responses_batch(
     tokenizer: Any,
     model: Any,
     requests: list[dict[str, Any]],
-    batch_size: int = 8,
-    max_new_tokens: int = 512,
+    batch_size: int = 1,
+    max_new_tokens: int = 128,
     temperature: float = 0.0,
     top_p: float = 0.9,
     repetition_penalty: float = 1.05,
@@ -430,7 +493,6 @@ def generate_llm_responses_batch(
     while i < len(requests):
         batch = requests[i : i + batch_size]
 
-        # Build chat-template texts for the batch
         texts: list[str] = []
         idx_map: list[int] = []
         fallback: list[tuple[int, dict[str, Any]]] = []
@@ -453,7 +515,6 @@ def generate_llm_responses_batch(
             else:
                 fallback.append((i + j, req))
 
-        # Run the safe ones in a single generate call
         if texts:
             model_inputs = create_model_inputs_batch(
                 texts=texts, tokenizer=tokenizer, model=model
@@ -467,10 +528,12 @@ def generate_llm_responses_batch(
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
             )
-            for k, out in enumerate(outs):
-                results[idx_map[k]] = out
+            for k, out_text in enumerate(outs):
+                results[idx_map[k]] = out_text
 
-        # Fallback for oversized prompts (keeps your no-truncate + split logic)
+            del outs
+            _cleanup_cuda()
+
         for idx, req in fallback:
             results[idx] = generate_llm_response(
                 tokenizer=tokenizer,
@@ -483,6 +546,7 @@ def generate_llm_responses_batch(
                 sys_prompt=req.get("sys_prompt"),
                 usr_prompt=req.get("usr_prompt"),
             )
+            _cleanup_cuda()
 
         i += batch_size
 
@@ -496,7 +560,7 @@ def stream_llm_response(
     file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 160,
     temperature: float = 0.2,
     top_p: float = 0.9,
     repetition_penalty: float = 1.05,
@@ -541,12 +605,14 @@ def stream_llm_response(
         max_new_tokens=max_new_tokens,
         use_cache=True,
         do_sample=(temperature > 0),
-        temperature=temperature,
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         num_beams=1,
         pad_token_id=pad_token_id,
     )
+
+    if temperature > 0:
+        gen_kwargs["temperature"] = temperature
 
     t = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
     t.start()
@@ -554,3 +620,7 @@ def stream_llm_response(
     for text in streamer:
         if text:
             yield text
+
+    del inputs
+    del gen_kwargs
+    _cleanup_cuda()
