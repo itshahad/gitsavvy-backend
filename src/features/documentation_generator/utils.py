@@ -2,21 +2,37 @@ import re
 
 
 def parse_yaml_front_matter(text: str):
-    print(text)
-    if not text.strip().startswith("---"):
-        raise ValueError("Missing YAML front matter")
+    text = text.strip()
 
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        raise ValueError("Invalid YAML structure")
+    # case 1: Proper YAML front matter exists
+    if text.startswith("---"):
+        parts = text.split("---", 2)
 
-    yaml_block = parts[1].strip()
-    markdown_body = parts[2].strip()
+        if len(parts) >= 3:
+            yaml_block = parts[1].strip()
+            markdown_body = parts[2].strip()
 
-    short_summary = ""
-    for line in yaml_block.splitlines():
-        if line.startswith("short_summary:"):
-            short_summary = line.split(":", 1)[1].strip()
+            short_summary = ""
+            for line in yaml_block.splitlines():
+                if line.startswith("short_summary:"):
+                    short_summary = line.split(":", 1)[1].strip()
+
+            return short_summary, markdown_body
+
+    # try to extract summary from text
+    summary_match = re.search(r"short_summary:\s*(.+)", text)
+    if summary_match:
+        short_summary = summary_match.group(1).strip()
+    else:
+        # fallback: first sentence or first line
+        first_line = text.splitlines()[0].strip()
+        short_summary = (
+            first_line
+            if first_line
+            else "Not explicitly defined in the provided content."
+        )
+
+    markdown_body = text
 
     return short_summary, markdown_body
 
@@ -44,15 +60,3 @@ def split_huge_text(chunk_content: str, max_bytes: int = 6_000) -> list[str]:
     if text:
         texts.append(text)
     return texts
-
-
-def extract_code(text: str) -> str:
-    match = re.search(r"Code:\s*\n?(.*)", text, re.DOTALL)
-    return match.group(1).strip() if match else ""
-
-
-def extract_signature(text: str) -> str:
-    match = re.search(
-        r"Signature:\s*\n?(.*?)(?=\n[A-Z][a-zA-Z]+:|\nCode:|\Z)", text, re.DOTALL
-    )
-    return match.group(1).strip() if match else ""
