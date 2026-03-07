@@ -27,7 +27,6 @@ class RepositoryMetadataModel(BaseModel):
     owner: str = Field(validation_alias=AliasPath("owner", "login"))
     name: str
     description: str | None = None
-    url: HttpUrl = Field(validation_alias=AliasPath("html_url"))
     forks_count: int | None = None
     open_issues_count: int | None = None
     default_branch: str
@@ -38,16 +37,17 @@ class RepositoryMetadataModel(BaseModel):
 
 
 class RepoCreate(RepositoryMetadataModel):
+    url: HttpUrl = Field(validation_alias=AliasPath("html_url"))
     topics: list[str] = []
     language: str | None = None
 
 
 class RepoRead(RepositoryMetadataModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     owner: str
     avatar_url: HttpUrl | None = None
+    url: HttpUrl
     topics: list[TopicRead] = []
 
 
