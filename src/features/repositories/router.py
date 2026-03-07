@@ -63,3 +63,17 @@ def get_repositories(
         return {"data": repos}
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/README")
+def get_repository_readme(
+    repo_id: int,
+    db: Session = Depends(get_db),
+):
+    repos_service = ReposService(db_session=db)
+    try:
+        readme = repos_service.get_repo_readme(repo_id=repo_id)
+        result: dict[str, str | int | None] = {"repo_id": repo_id, "readme": readme}
+        return result
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e

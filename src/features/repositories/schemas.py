@@ -27,14 +27,14 @@ class RepositoryMetadataModel(BaseModel):
     owner: str = Field(validation_alias=AliasPath("owner", "login"))
     name: str
     description: str | None = None
-    url: HttpUrl
+    url: HttpUrl = Field(validation_alias=AliasPath("html_url"))
     forks_count: int | None = None
     open_issues_count: int | None = None
     default_branch: str
     avatar_url: HttpUrl | None = Field(
         default=None, validation_alias=AliasPath("organization", "avatar_url")
     )
-    readme_content: str | None = None
+    # readme_content: str | None = None
 
 
 class RepoCreate(RepositoryMetadataModel):

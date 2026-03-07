@@ -1,7 +1,7 @@
 import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
@@ -246,7 +246,11 @@ class ReposService:
     cached_repos: dict[int, RepoRead] = {}
 
     def get_repos(self):
-        stmt = select(Repository).order_by(Repository.id)
+        stmt = (
+            select(Repository)
+            .options(defer(Repository.readme_content))
+            .order_by(Repository.id)
+        )
         repos = self.db_session.execute(stmt).scalars().all()
 
         repos_list: list[RepoRead] = []
@@ -255,3 +259,10 @@ class ReposService:
             repos_list.append(repo_read)
             self.cached_repos[repo.id] = repo_read
         return repos_list
+
+    def get_repo_readme(self, repo_id: int) -> str | None:
+        stmt = select(Repository.readme_content).where(Repository.id == repo_id)
+
+        readme = self.db_session.execute(stmt).scalar_one_or_none()
+
+        return readme
