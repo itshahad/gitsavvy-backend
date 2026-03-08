@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # DB ===================================================================================
 DB_USERNAME = os.getenv("DB_USERNAME", "postgres")
@@ -10,6 +13,13 @@ DB_NAME = os.getenv("DB_NAME", "postgres")
 SQLALCHEMY_DB_URL = (
     f"postgresql+psycopg2://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
+
+
+def get_sqlalchemy_db_url(host: str | None = None) -> str:
+    DB_HOST = host if host is not None else os.getenv("DB_HOST", "localhost")
+    return f"postgresql+psycopg2://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+
 # celery ===================================================================================
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379")

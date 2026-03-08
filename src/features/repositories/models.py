@@ -19,10 +19,17 @@ class Repository(BaseModel):
     name: Mapped[str] = mapped_column(String(30))
     description: Mapped[str] = mapped_column(nullable=True)
     url: Mapped[str]
-    forks_count: Mapped[int] = mapped_column(nullable=True)
-    open_issues_count: Mapped[int] = mapped_column(nullable=True)
     default_branch: Mapped[str] = mapped_column(String(30))
     avatar_url: Mapped[str] = mapped_column(nullable=True)
+    stars_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    forks_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    open_issues_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
 
     files: Mapped[List["File"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
