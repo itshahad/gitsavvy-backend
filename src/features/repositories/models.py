@@ -95,7 +95,7 @@ class Module(BaseModel):
     )
 
     module_parent_id: Mapped[int] = mapped_column(
-        ForeignKey("module.id"), nullable=True
+        ForeignKey("module.id", ondelete="CASCADE"), nullable=True
     )
     module_parent: Mapped["Module"] = relationship(
         back_populates="children_modules", remote_side=[id]
@@ -123,7 +123,7 @@ class File(BaseModel):
     )
     repository: Mapped["Repository"] = relationship(back_populates="files")
 
-    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))
+    module_id: Mapped[int] = mapped_column(ForeignKey("module.id", ondelete="CASCADE"))
     module: Mapped["Module"] = relationship(back_populates="files")
 
     commit_sha: Mapped[str]

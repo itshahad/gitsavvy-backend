@@ -43,7 +43,7 @@ class Chunk(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))
+    file_id: Mapped[int] = mapped_column(ForeignKey("file.id", ondelete="CASCADE"))
     file: Mapped["File"] = relationship(back_populates="chunks")
 
     repo_id: Mapped[int] = mapped_column(
@@ -51,7 +51,9 @@ class Chunk(BaseModel):
     )
     repository: Mapped["Repository"] = relationship(back_populates="chunks")
 
-    chunk_parent_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), nullable=True)
+    chunk_parent_id: Mapped[int] = mapped_column(
+        ForeignKey("chunk.id", ondelete="CASCADE"), nullable=True
+    )
     chunk_parent: Mapped["Chunk"] = relationship(
         back_populates="children_chunks", remote_side=[id]
     )
@@ -93,7 +95,9 @@ class ChunkEmbedding(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True)
     embedding_vector: Mapped[list[float]] = mapped_column(Vector(1536))
 
-    chunk_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), unique=True)
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("chunk.id", ondelete="CASCADE"), unique=True
+    )
     chunk: Mapped["Chunk"] = relationship(back_populates="embedding")
 
     def __repr__(self):
