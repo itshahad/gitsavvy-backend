@@ -33,11 +33,12 @@ class RepositoryMetadataModel(BaseModel):
     avatar_url: HttpUrl | None = Field(
         default=None, validation_alias=AliasPath("organization", "avatar_url")
     )
+    stars_count: int | None = Field(validation_alias=AliasPath("stargazers_count"))
+    url: HttpUrl = Field(validation_alias=AliasPath("html_url"))
     # readme_content: str | None = None
 
 
 class RepoCreate(RepositoryMetadataModel):
-    url: HttpUrl = Field(validation_alias=AliasPath("html_url"))
     topics: list[str] = []
     language: str | None = None
 
@@ -49,6 +50,7 @@ class RepoRead(RepositoryMetadataModel):
     avatar_url: HttpUrl | None = None
     url: HttpUrl
     topics: list[TopicRead] = []
+    stars_count: int | None
 
 
 # ====================================================================
