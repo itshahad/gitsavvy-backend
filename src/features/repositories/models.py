@@ -19,10 +19,17 @@ class Repository(BaseModel):
     name: Mapped[str] = mapped_column(String(30))
     description: Mapped[str] = mapped_column(nullable=True)
     url: Mapped[str]
-    forks_count: Mapped[int] = mapped_column(nullable=True)
-    open_issues_count: Mapped[int] = mapped_column(nullable=True)
     default_branch: Mapped[str] = mapped_column(String(30))
     avatar_url: Mapped[str] = mapped_column(nullable=True)
+    stars_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    forks_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    open_issues_count: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
 
     files: Mapped[List["File"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
@@ -88,7 +95,7 @@ class Module(BaseModel):
     )
 
     module_parent_id: Mapped[int] = mapped_column(
-        ForeignKey("module.id"), nullable=True
+        ForeignKey("module.id", ondelete="CASCADE"), nullable=True
     )
     module_parent: Mapped["Module"] = relationship(
         back_populates="children_modules", remote_side=[id]
@@ -116,7 +123,7 @@ class File(BaseModel):
     )
     repository: Mapped["Repository"] = relationship(back_populates="files")
 
-    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))
+    module_id: Mapped[int] = mapped_column(ForeignKey("module.id", ondelete="CASCADE"))
     module: Mapped["Module"] = relationship(back_populates="files")
 
     commit_sha: Mapped[str]
