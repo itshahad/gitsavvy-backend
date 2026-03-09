@@ -10,12 +10,12 @@
       "name": "Documentation",
       "item": [
         {
-          "name": "step 2 - get modules files",
+          "name": "step 2 - get module children",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files?cursor=num",
+              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/children",
               "host": [
                 "{{url}}"
               ],
@@ -24,25 +24,25 @@
                 "{{repo_id}}",
                 "modules",
                 "{{module_id}}",
-                "files"
+                "children"
               ],
               "query": [
                 {
                   "key": "cursor",
                   "value": "num",
-                  "type": "text"
+                  "disabled": true
                 }
               ]
             }
           },
           "response": [
             {
-              "name": "success",
+              "name": "step 2 - get module children",
               "originalRequest": {
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files",
+                  "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/children",
                   "host": [
                     "{{url}}"
                   ],
@@ -51,7 +51,7 @@
                     "{{repo_id}}",
                     "modules",
                     "{{module_id}}",
-                    "files"
+                    "children"
                   ],
                   "query": [
                     {
@@ -68,7 +68,7 @@
               "header": [
                 {
                   "key": "date",
-                  "value": "Sun, 01 Mar 2026 13:00:50 GMT"
+                  "value": "Sat, 07 Mar 2026 18:32:51 GMT"
                 },
                 {
                   "key": "server",
@@ -76,7 +76,7 @@
                 },
                 {
                   "key": "content-length",
-                  "value": "707"
+                  "value": "1730"
                 },
                 {
                   "key": "content-type",
@@ -84,7 +84,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n    \"data\": [\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/custom.js\",\n            \"content_hash\": \"9e00539895c8afb97888ce7999c9dc3a28779ee2\",\n            \"id\": 256\n        },\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/init_kapa_widget.js\",\n            \"content_hash\": \"86683301cec550883805534c8c399596561c211f\",\n            \"id\": 257\n        },\n        {\n            \"repository_id\": 2,\n            \"module_id\": 27,\n            \"commit_sha\": \"a4ad07b48aa4dca35c3325ec2fe5485676a542c8\",\n            \"file_path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js/termynal.js\",\n            \"content_hash\": \"26afba3fda03387f5c21f9f1d5e18decc6a0432e\",\n            \"id\": 258\n        }\n    ],\n    \"next_cursor\": null\n}"
+              "body": "{\n    \"files\": {\n        \"data\": [\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/.pre-commit-config.yaml\",\n                \"content_hash\": \"0948f32dca475dbed2d3a91c6bdca8bfea9a9c85\",\n                \"id\": 30\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/CONTRIBUTING.md\",\n                \"content_hash\": \"cd35f659805f82b10a59d4ccc40abb01942dd537\",\n                \"id\": 31\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/LICENSE\",\n                \"content_hash\": \"edca4edf088d9bfe3e2c9bb407c6e29f4c0b8114\",\n                \"id\": 32\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/README.md\",\n                \"content_hash\": \"d58ea73f818f75965144ca3d8b3a9fc736856d31\",\n                \"id\": 33\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/SECURITY.md\",\n                \"content_hash\": \"0343908620ce9caaa9aed752d9a7b20a2cacbe4b\",\n                \"id\": 34\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/mkdocs.env.yml\",\n                \"content_hash\": \"3cde4df3f93b4cfeca660671a41e7c1ece6262aa\",\n                \"id\": 420\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/mkdocs.yml\",\n                \"content_hash\": \"f2729b245fd13f493d1b59712f896a32ea092f84\",\n                \"id\": 421\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/pyproject.toml\",\n                \"content_hash\": \"765ddbc6d1bd7166e5ee8a77943d65c760683819\",\n                \"id\": 422\n            }\n        ],\n        \"next_cursor\": null\n    },\n    \"modules\": {\n        \"data\": [],\n        \"next_cursor\": null\n    }\n}"
             }
           ]
         },
@@ -94,7 +94,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files/{{file_id}}/docs?cursor=num",
+              "raw": "{{url}}/documentation/{{repo_id}}/modules/{{module_id}}/files/{{file_id}}/docs",
               "host": [
                 "{{url}}"
               ],
@@ -111,7 +111,7 @@
                 {
                   "key": "cursor",
                   "value": "num",
-                  "type": "text"
+                  "disabled": true
                 }
               ]
             }
@@ -178,60 +178,47 @@
           ]
         },
         {
-          "name": "step 1 - get repo modules Copy",
+          "name": "step 1 - get repo children",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{url}}/documentation/{{repo_id}}/modules?cursor=22",
+              "raw": "{{url}}/documentation/{{repo_id}}/children",
               "host": [
                 "{{url}}"
               ],
               "path": [
                 "documentation",
                 "{{repo_id}}",
-                "modules"
-              ],
-              "query": [
-                {
-                  "key": "cursor",
-                  "value": "22",
-                  "type": "text"
-                }
+                "children"
               ]
             }
           },
           "response": [
             {
-              "name": "success",
+              "name": "step 1 - get repo children",
               "originalRequest": {
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/documentation/{{repo_id}}/modules?cursor=22",
+                  "raw": "{{url}}/documentation/{{repo_id}}/children",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "documentation",
                     "{{repo_id}}",
-                    "modules"
-                  ],
-                  "query": [
-                    {
-                      "key": "cursor",
-                      "value": "22"
-                    }
+                    "children"
                   ]
                 }
               },
               "status": "OK",
               "code": 200,
-              "_postman_previewlanguage": "",
+              "_postman_previewlanguage": null,
               "header": [
                 {
                   "key": "date",
-                  "value": "Sun, 01 Mar 2026 13:02:28 GMT"
+                  "value": "Sat, 07 Mar 2026 18:32:18 GMT"
                 },
                 {
                   "key": "server",
@@ -239,21 +226,216 @@
                 },
                 {
                   "key": "content-length",
-                  "value": "1709"
+                  "value": "2319"
                 },
                 {
                   "key": "content-type",
                   "value": "application/json"
                 }
               ],
-              "cookie": [
+              "cookie": [],
+              "body": "{\n    \"files\": {\n        \"data\": [\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/.pre-commit-config.yaml\",\n                \"content_hash\": \"0948f32dca475dbed2d3a91c6bdca8bfea9a9c85\",\n                \"id\": 30\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/CONTRIBUTING.md\",\n                \"content_hash\": \"cd35f659805f82b10a59d4ccc40abb01942dd537\",\n                \"id\": 31\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/LICENSE\",\n                \"content_hash\": \"edca4edf088d9bfe3e2c9bb407c6e29f4c0b8114\",\n                \"id\": 32\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/README.md\",\n                \"content_hash\": \"d58ea73f818f75965144ca3d8b3a9fc736856d31\",\n                \"id\": 33\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/SECURITY.md\",\n                \"content_hash\": \"0343908620ce9caaa9aed752d9a7b20a2cacbe4b\",\n                \"id\": 34\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/mkdocs.env.yml\",\n                \"content_hash\": \"3cde4df3f93b4cfeca660671a41e7c1ece6262aa\",\n                \"id\": 420\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/mkdocs.yml\",\n                \"content_hash\": \"f2729b245fd13f493d1b59712f896a32ea092f84\",\n                \"id\": 421\n            },\n            {\n                \"repository_id\": 2,\n                \"module_id\": 2,\n                \"commit_sha\": \"9286ffeb0de672e9de8aa916caf10035cd16728f\",\n                \"file_path\": \"fastapi-typer-9286ffe/pyproject.toml\",\n                \"content_hash\": \"765ddbc6d1bd7166e5ee8a77943d65c760683819\",\n                \"id\": 422\n            }\n        ],\n        \"next_cursor\": null\n    },\n    \"modules\": {\n        \"data\": [\n            {\n                \"repository_id\": 2,\n                \"path\": \".github\",\n                \"module_parent_id\": 2,\n                \"id\": 3\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"data\",\n                \"module_parent_id\": 2,\n                \"id\": 7\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"docs\",\n                \"module_parent_id\": 2,\n                \"id\": 8\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"docs_src\",\n                \"module_parent_id\": 2,\n                \"id\": 22\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"scripts\",\n                \"module_parent_id\": 2,\n                \"id\": 83\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"tests\",\n                \"module_parent_id\": 2,\n                \"id\": 85\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"typer-cli\",\n                \"module_parent_id\": 2,\n                \"id\": 142\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"typer-slim\",\n                \"module_parent_id\": 2,\n                \"id\": 143\n            },\n            {\n                \"repository_id\": 2,\n                \"path\": \"typer\",\n                \"module_parent_id\": 2,\n                \"id\": 144\n            }\n        ],\n        \"next_cursor\": null\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Indexing - Admin Only",
+      "item": [
+        {
+          "name": "process repo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"typer\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/repositories/add-repo",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "repositories",
+                "add-repo"
+              ],
+              "query": [
                 {
-                  "expires": "Invalid Date",
-                  "domain": "",
-                  "path": ""
+                  "key": "repo_id",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "doc_gen_from_module",
+                  "value": "260",
+                  "disabled": true
+                },
+                {
+                  "key": "doc_gen_from_file",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "doc_gen_from_chunk",
+                  "value": "3884",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Repositories",
+      "item": [
+        {
+          "name": "get repositories list",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+            },
+            "url": {
+              "raw": "{{url}}/repositories",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "repositories"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "get repositories list",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+                },
+                "url": {
+                  "raw": "{{url}}/repositories",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "repositories"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sat, 07 Mar 2026 18:31:30 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "994"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
                 }
               ],
-              "body": "{\n    \"data\": [\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/advanced/security\",\n            \"id\": 23\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/css\",\n            \"id\": 24\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/deployment\",\n            \"id\": 25\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/how-to\",\n            \"id\": 26\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/js\",\n            \"id\": 27\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/learn\",\n            \"id\": 28\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference\",\n            \"id\": 29\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference/openapi\",\n            \"id\": 30\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/reference/security\",\n            \"id\": 31\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/resources\",\n            \"id\": 32\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial\",\n            \"id\": 33\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial/dependencies\",\n            \"id\": 34\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/docs/tutorial/security\",\n            \"id\": 35\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en\",\n            \"id\": 36\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/overrides\",\n            \"id\": 37\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/en/overrides/partials\",\n            \"id\": 38\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs\",\n            \"id\": 39\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/about\",\n            \"id\": 40\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/advanced\",\n            \"id\": 41\n        },\n        {\n            \"repository_id\": 2,\n            \"path\": \"fastapi-fastapi-a4ad07b/docs/es/docs/advanced/security\",\n            \"id\": 42\n        }\n    ],\n    \"next_cursor\": 43\n}"
+              "cookie": [],
+              "body": "{\n    \"data\": [\n        {\n            \"owner\": \"codeplea\",\n            \"name\": \"tinyexpr\",\n            \"description\": \"tiny recursive descent expression parser, compiler, and evaluation engine for math expressions\",\n            \"forks_count\": 288,\n            \"open_issues_count\": 37,\n            \"default_branch\": \"master\",\n            \"avatar_url\": null,\n            \"id\": 1,\n            \"url\": \"https://api.github.com/repos/codeplea/tinyexpr\",\n            \"topics\": []\n        },\n        {\n            \"owner\": \"fastapi\",\n            \"name\": \"typer\",\n            \"description\": \"Typer, build great CLIs. Easy to code. Based on Python type hints.\",\n            \"forks_count\": 852,\n            \"open_issues_count\": 63,\n            \"default_branch\": \"master\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/156354296?v=4\",\n            \"id\": 2,\n            \"url\": \"https://api.github.com/repos/fastapi/typer\",\n            \"topics\": [\n                {\n                    \"id\": 1,\n                    \"repository_id\": 2,\n                    \"topic\": \"cli\"\n                },\n                {\n                    \"id\": 2,\n                    \"repository_id\": 2,\n                    \"topic\": \"click\"\n                },\n                {\n                    \"id\": 3,\n                    \"repository_id\": 2,\n                    \"topic\": \"python\"\n                },\n                {\n                    \"id\": 4,\n                    \"repository_id\": 2,\n                    \"topic\": \"python3\"\n                },\n                {\n                    \"id\": 5,\n                    \"repository_id\": 2,\n                    \"topic\": \"shell\"\n                },\n                {\n                    \"id\": 6,\n                    \"repository_id\": 2,\n                    \"topic\": \"terminal\"\n                },\n                {\n                    \"id\": 7,\n                    \"repository_id\": 2,\n                    \"topic\": \"typehints\"\n                },\n                {\n                    \"id\": 8,\n                    \"repository_id\": 2,\n                    \"topic\": \"typer\"\n                }\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "get repository readme",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+            },
+            "url": {
+              "raw": "{{url}}/repositories/{{repo_id}}/README",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "repositories",
+                "{{repo_id}}",
+                "README"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "get repository readme",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+                },
+                "url": {
+                  "raw": "{{url}}/repositories/{{repo_id}}/README",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "repositories",
+                    "{{repo_id}}",
+                    "README"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sat, 07 Mar 2026 18:31:49 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "10471"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"repo_id\": 1,\n    \"readme\": \"[![Build Status](https://travis-ci.com/codeplea/tinyexpr.svg?branch=master)](https://travis-ci.com/codeplea/tinyexpr)\\n\\n\\n<img alt=\\\"TinyExpr logo\\\" src=\\\"https://codeplea.com/public/content/tinyexpr_logo.png\\\" align=\\\"right\\\"/>\\n\\n# TinyExpr\\n\\nTinyExpr is a very small recursive descent parser and evaluation engine for\\nmath expressions. It's handy when you want to add the ability to evaluate\\nmath expressions at runtime without adding a bunch of cruft to your project.\\n\\nIn addition to the standard math operators and precedence, TinyExpr also supports\\nthe standard C math functions and runtime binding of variables.\\n\\n## Features\\n\\n- **C99 with no dependencies**.\\n- Single source file and header file.\\n- Simple and fast.\\n- Implements standard operators precedence.\\n- Exposes standard C math functions (sin, sqrt, ln, etc.).\\n- Can add custom functions and variables easily.\\n- Can bind variables at eval-time.\\n- Released under the zlib license - free for nearly any use.\\n- Easy to use and integrate with your code\\n- Thread-safe, provided that your *malloc* is.\\n\\n## Building\\n\\nTinyExpr is self-contained in two files: `tinyexpr.c` and `tinyexpr.h`. To use\\nTinyExpr, simply add those two files to your project.\\n\\n## Short Example\\n\\nHere is a minimal example to evaluate an expression at runtime.\\n\\n```C\\n    #include \\\"tinyexpr.h\\\"\\n    printf(\\\"%f\\\\n\\\", te_interp(\\\"5*5\\\", 0)); /* Prints 25. */\\n```\\n\\n\\n## Usage\\n\\nTinyExpr defines only four functions:\\n\\n```C\\n    double te_interp(const char *expression, int *error);\\n    te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error);\\n    double te_eval(const te_expr *expr);\\n    void te_free(te_expr *expr);\\n```\\n\\n## te_interp\\n```C\\n    double te_interp(const char *expression, int *error);\\n```\\n\\n`te_interp()` takes an expression and immediately returns the result of it. If there\\nis a parse error, `te_interp()` returns NaN.\\n\\nIf the `error` pointer argument is not 0, then `te_interp()` will set `*error` to the position\\nof the parse error on failure, and set `*error` to 0 on success.\\n\\n**example usage:**\\n\\n```C\\n    int error;\\n\\n    double a = te_interp(\\\"(5+5)\\\", 0); /* Returns 10. */\\n    double b = te_interp(\\\"(5+5)\\\", &error); /* Returns 10, error is set to 0. */\\n    double c = te_interp(\\\"(5+5\\\", &error); /* Returns NaN, error is set to 4. */\\n```\\n\\n## te_compile, te_eval, te_free\\n```C\\n    te_expr *te_compile(const char *expression, const te_variable *lookup, int lookup_len, int *error);\\n    double te_eval(const te_expr *n);\\n    void te_free(te_expr *n);\\n```\\n\\nGive `te_compile()` an expression with unbound variables and a list of\\nvariable names and pointers. `te_compile()` will return a `te_expr*` which can\\nbe evaluated later using `te_eval()`. On failure, `te_compile()` will return 0\\nand optionally set the passed in `*error` to the location of the parse error.\\n\\nYou may also compile expressions without variables by passing `te_compile()`'s second\\nand third arguments as 0.\\n\\nGive `te_eval()` a `te_expr*` from `te_compile()`. `te_eval()` will evaluate the expression\\nusing the current variable values.\\n\\nAfter you're finished, make sure to call `te_free()`.\\n\\n**example usage:**\\n\\n```C\\n    double x, y;\\n    /* Store variable names and pointers. */\\n    te_variable vars[] = {{\\\"x\\\", &x}, {\\\"y\\\", &y}};\\n\\n    int err;\\n    /* Compile the expression with variables. */\\n    te_expr *expr = te_compile(\\\"sqrt(x^2+y^2)\\\", vars, 2, &err);\\n\\n    if (expr) {\\n        x = 3; y = 4;\\n        const double h1 = te_eval(expr); /* Returns 5. */\\n\\n        x = 5; y = 12;\\n        const double h2 = te_eval(expr); /* Returns 13. */\\n\\n        te_free(expr);\\n    } else {\\n        printf(\\\"Parse error at %d\\\\n\\\", err);\\n    }\\n\\n```\\n\\n## Longer Example\\n\\nHere is a complete example that will evaluate an expression passed in from the command\\nline. It also does error checking and binds the variables `x` and `y` to *3* and *4*, respectively.\\n\\n```C\\n    #include \\\"tinyexpr.h\\\"\\n    #include <stdio.h>\\n\\n    int main(int argc, char *argv[])\\n    {\\n        if (argc < 2) {\\n            printf(\\\"Usage: example2 \\\\\\\"expression\\\\\\\"\\\\n\\\");\\n            return 0;\\n        }\\n\\n        const char *expression = argv[1];\\n        printf(\\\"Evaluating:\\\\n\\\\t%s\\\\n\\\", expression);\\n\\n        /* This shows an example where the variables\\n         * x and y are bound at eval-time. */\\n        double x, y;\\n        te_variable vars[] = {{\\\"x\\\", &x}, {\\\"y\\\", &y}};\\n\\n        /* This will compile the expression and check for errors. */\\n        int err;\\n        te_expr *n = te_compile(expression, vars, 2, &err);\\n\\n        if (n) {\\n            /* The variables can be changed here, and eval can be called as many\\n             * times as you like. This is fairly efficient because the parsing has\\n             * already been done. */\\n            x = 3; y = 4;\\n            const double r = te_eval(n); printf(\\\"Result:\\\\n\\\\t%f\\\\n\\\", r);\\n            te_free(n);\\n        } else {\\n            /* Show the user where the error is at. */\\n            printf(\\\"\\\\t%*s^\\\\nError near here\\\", err-1, \\\"\\\");\\n        }\\n\\n        return 0;\\n    }\\n```\\n\\n\\nThis produces the output:\\n\\n    $ example2 \\\"sqrt(x^2+y2)\\\"\\n        Evaluating:\\n                sqrt(x^2+y2)\\n                          ^\\n        Error near here\\n\\n\\n    $ example2 \\\"sqrt(x^2+y^2)\\\"\\n        Evaluating:\\n                sqrt(x^2+y^2)\\n        Result:\\n                5.000000\\n\\n\\n## Binding to Custom Functions\\n\\nTinyExpr can also call to custom functions implemented in C. Here is a short example:\\n\\n```C\\ndouble my_sum(double a, double b) {\\n    /* Example C function that adds two numbers together. */\\n    return a + b;\\n}\\n\\nte_variable vars[] = {\\n    {\\\"mysum\\\", my_sum, TE_FUNCTION2} /* TE_FUNCTION2 used because my_sum takes two arguments. */\\n};\\n\\nte_expr *n = te_compile(\\\"mysum(5, 6)\\\", vars, 1, 0);\\n\\n```\\n\\n\\n## How it works\\n\\n`te_compile()` uses a simple recursive descent parser to compile your\\nexpression into a syntax tree. For example, the expression `\\\"sin x + 1/4\\\"`\\nparses as:\\n\\n![example syntax tree](doc/e1.png?raw=true)\\n\\n`te_compile()` also automatically prunes constant branches. In this example,\\nthe compiled expression returned by `te_compile()` would become:\\n\\n![example syntax tree](doc/e2.png?raw=true)\\n\\n`te_eval()` will automatically load in any variables by their pointer, and then evaluate\\nand return the result of the expression.\\n\\n`te_free()` should always be called when you're done with the compiled expression.\\n\\n\\n## Speed\\n\\n\\nTinyExpr is pretty fast compared to C when the expression is short, when the\\nexpression does hard calculations (e.g. exponentiation), and when some of the\\nwork can be simplified by `te_compile()`. TinyExpr is slow compared to C when the\\nexpression is long and involves only basic arithmetic.\\n\\nHere is some example performance numbers taken from the included\\n**benchmark.c** program:\\n\\n| Expression | te_eval time | native C time | slowdown  |\\n| :------------- |-------------:| -----:|----:|\\n| sqrt(a^1.5+a^2.5) | 15,641 ms | 14,478 ms | 8% slower |\\n| a+5 | 765 ms | 563 ms | 36% slower |\\n| a+(5*2) | 765 ms | 563 ms | 36% slower |\\n| (a+5)*2 | 1422 ms | 563 ms | 153% slower |\\n| (1/(a+1)+2/(a+2)+3/(a+3)) | 5,516 ms | 1,266 ms | 336% slower |\\n\\n\\n\\n## Grammar\\n\\nTinyExpr parses the following grammar:\\n\\n    <list>      =    <expr> {\\\",\\\" <expr>}\\n    <expr>      =    <term> {(\\\"+\\\" | \\\"-\\\") <term>}\\n    <term>      =    <factor> {(\\\"*\\\" | \\\"/\\\" | \\\"%\\\") <factor>}\\n    <factor>    =    <power> {\\\"^\\\" <power>}\\n    <power>     =    {(\\\"-\\\" | \\\"+\\\")} <base>\\n    <base>      =    <constant>\\n                   | <variable>\\n                   | <function-0> {\\\"(\\\" \\\")\\\"}\\n                   | <function-1> <power>\\n                   | <function-X> \\\"(\\\" <expr> {\\\",\\\" <expr>} \\\")\\\"\\n                   | \\\"(\\\" <list> \\\")\\\"\\n\\nIn addition, whitespace between tokens is ignored.\\n\\nValid variable names consist of a letter followed by any combination of:\\nletters, the digits *0* through *9*, and underscore. Constants can be integers\\nor floating-point numbers, and can be in decimal, hexadecimal (e.g., *0x57CEF7*),\\nor scientific notation (e.g., *1e3* for *1000*).\\nA leading zero is not required (e.g., *.5* for *0.5*).\\n\\n\\n## Functions supported\\n\\nTinyExpr supports addition (+), subtraction/negation (-), multiplication (\\\\*),\\ndivision (/), exponentiation (^) and modulus (%) with the normal operator\\nprecedence (the one exception being that exponentiation is evaluated\\nleft-to-right, but this can be changed - see below).\\n\\nThe following C math functions are also supported:\\n\\n- abs (calls to *fabs*), acos, asin, atan, atan2, ceil, cos, cosh, exp, floor, ln (calls to *log*), log (calls to *log10* by default, see below), log10, pow, sin, sinh, sqrt, tan, tanh\\n\\nThe following functions are also built-in and provided by TinyExpr:\\n\\n- fac (factorials e.g. `fac 5` == 120)\\n- ncr (combinations e.g. `ncr(6,2)` == 15)\\n- npr (permutations e.g. `npr(6,2)` == 30)\\n\\nAlso, the following constants are available:\\n\\n- `pi`, `e`\\n\\n\\n## Compile-time options\\n\\n\\nBy default, TinyExpr does exponentiation from left to right. For example:\\n\\n`a^b^c == (a^b)^c` and `-a^b == (-a)^b`\\n\\nThis is by design. It's the way that spreadsheets do it (e.g. Excel, Google Sheets).\\n\\n\\nIf you would rather have exponentiation work from right to left, you need to\\ndefine `TE_POW_FROM_RIGHT` when compiling `tinyexpr.c`. There is a\\ncommented-out define near the top of that file. With this option enabled, the\\nbehaviour is:\\n\\n`a^b^c == a^(b^c)` and `-a^b == -(a^b)`\\n\\nThat will match how many scripting languages do it (e.g. Python, Ruby).\\n\\nAlso, if you'd like `log` to default to the natural log instead of `log10`,\\nthen you can define `TE_NAT_LOG`.\\n\\n## Hints\\n\\n- All functions/types start with the letters *te*.\\n\\n- To allow constant optimization, surround constant expressions in parentheses.\\n  For example \\\"x+(1+5)\\\" will evaluate the \\\"(1+5)\\\" expression at compile time and\\n  compile the entire expression as \\\"x+6\\\", saving a runtime calculation. The\\n  parentheses are important, because TinyExpr will not change the order of\\n  evaluation. If you instead compiled \\\"x+1+5\\\" TinyExpr will insist that \\\"1\\\" is\\n  added to \\\"x\\\" first, and \\\"5\\\" is added the result second.\\n\\n\"\n}"
             }
           ]
         }

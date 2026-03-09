@@ -29,7 +29,10 @@ class ChatbotService:
         self.k = k
         self.db_session = db_session
         self.embedding_service = EmbeddingService(
-            db_session=db_session, embedder=embedder, tokenizer=embedding_tokenizer
+            repo_id=repo_id,
+            db_session=db_session,
+            embedder=embedder,
+            tokenizer=embedding_tokenizer,
         )
 
     def embed_query(self, query: str):
@@ -77,7 +80,7 @@ class ChatbotService:
                 continue
             chunks_set.add(chunk.id)
             header = f"[{chunk.type} {chunk.file_id} #{chunk.id}]"
-            parts.append(header + "\n" + chunk.content_text)
+            parts.append(header + "\n" + chunk.content)
         return "\n\n---\n\n".join(parts)
 
     def run_chatbot(self, query: str, channel: str):

@@ -1,82 +1,50 @@
 from typing import TypedDict
 from celery import Task  # type: ignore
 import requests
-from src.features.indexer.service import ChunkingService, EmbeddingService, RepoService
+from src.features.indexer.service import ChunkingService, EmbeddingService
 
+from src.features.repositories.tasks import DownloadRepoResult
 from src.worker import EMBEDDER, EMBEDDING_TOKENIZER, worker  # type: ignore
 from src.database import SessionLocal
-from src.features.indexer.utils import get_repo_path
 
 
-class IndexerResult(TypedDict):
+class ChunkerResult(TypedDict):
     status: str
     repo_id: int
-    owner: str
     name: str
-    commit_sha: str
-    chunks_created: int
-    encodings_created: int
 
 
 @worker.task(bind=True)  # type: ignore
-def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
+def chunk_repo(
+    self: Task,
+    download_repo_task_res: DownloadRepoResult,
+) -> ChunkerResult:
     db_session = SessionLocal()
     http = requests.session()
 
-    repo_service = RepoService(
-        db_session=db_session, http_session=http, repo_name=repo_name
-    )
+    repo_id = download_repo_task_res["repo_id"]
+    repo_name = download_repo_task_res["name"]
 
     try:
-
-        repo_path = get_repo_path(repo_name=repo_name)
-        print(repo_path)
-        self.update_state(state="PROGRESS", meta={"step": "metadata"})  # type: ignore
-
-        repo = repo_service.get_repo_metadata(owner=repo_owner, repo_name=repo_name)
-
-        self.update_state(state="PROGRESS", meta={"step": "download"})  # type: ignore
-
-        _, commit_sha = repo_service.download_repo(
-            owner=repo_owner, repo_name=repo_name
-        )
-
-        self.update_state(state="PROGRESS", meta={"step": "chunking"})  # type: ignore
-
-        embedding_service = EmbeddingService(
-            db_session=db_session,
-            chunking_service=None,
-            embedder=EMBEDDER,
-            tokenizer=EMBEDDING_TOKENIZER,
-        )
-
         chunking_service = ChunkingService(
-            repo_service=repo_service,
-            embedding_service=embedding_service,
             db_session=db_session,
-            repo_id=repo.id,
+            repo_id=repo_id,
             repo_name=repo_name,
         )
 
-        embedding_service.chunking_service = chunking_service
+        selected_files = chunking_service.get_selected_files(repo_id=repo_id)
 
-        chunks = chunking_service.chunk_repo_files(
-            zip_file_path=repo_path,
-            commit_sha=commit_sha,
+        self.update_state(state="PROGRESS", meta={"step": "chunking"})  # type: ignore
+        chunking_service.chunk_repo_files(
+            selected_files=selected_files,
         )
-
-        embeddings = embedding_service.embed_chunks(chunks=chunks)
 
         db_session.commit()
 
         return {
             "status": "ok",
-            "repo_id": repo.id,
-            "owner": repo_owner,
+            "repo_id": repo_id,
             "name": repo_name,
-            "commit_sha": commit_sha,
-            "chunks_created": len(chunks),
-            "encodings_created": len(embeddings),
         }
     except Exception:
         db_session.rollback()
@@ -84,3 +52,43 @@ def indexer(self: Task, repo_owner: str, repo_name: str) -> IndexerResult:
     finally:
         db_session.close()
         http.close()
+
+
+class IndexerResult(TypedDict):
+    status: str
+    repo_id: int
+    name: str
+
+
+@worker.task(bind=True)  # type: ignore
+def index_repo(
+    self: Task,
+    chunker_result: ChunkerResult,
+) -> IndexerResult:
+    db_session = SessionLocal()
+
+    repo_id = chunker_result["repo_id"]
+    repo_name = chunker_result["name"]
+
+    embedding_service = EmbeddingService(
+        repo_id=repo_id,
+        db_session=db_session,
+        embedder=EMBEDDER,
+        tokenizer=EMBEDDING_TOKENIZER,
+    )
+
+    try:
+        self.update_state(state="PROGRESS", meta={"step": "embedding"})  # type: ignore
+        embedding_service.embed_chunks()
+        db_session.commit()
+
+        return {
+            "status": "ok",
+            "repo_id": repo_id,
+            "name": repo_name,
+        }
+    except Exception:
+        db_session.rollback()
+        raise
+    finally:
+        db_session.close()

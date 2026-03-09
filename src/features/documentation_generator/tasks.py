@@ -3,6 +3,7 @@ from celery import Task  # type: ignore
 import requests
 from src.features.documentation_generator.service import DocGenerateService
 
+from src.features.indexer.tasks import IndexerResult
 from src.worker import LLM_MODEL, LLM_TOKENIZER, worker  # type: ignore
 from src.database import SessionLocal
 
@@ -16,8 +17,7 @@ class DocGeneratorResult(TypedDict):
 @worker.task(bind=True)  # type: ignore
 def docs_generator(
     self: Task,
-    repo_id: int,
-    repo_name: str,
+    indexer_result: IndexerResult,
     start_from_module: int | None = None,
     start_from_file: int | None = None,
     start_from_chunk: int | None = None,
@@ -25,12 +25,8 @@ def docs_generator(
     db_session = SessionLocal()
     http = requests.session()
 
-    # llm_model = None
-    # tokenizer = None
-
-    # llm_service = LlmService(
-    #     session=db_session, llm_model=llm_model, tokenizer=tokenizer
-    # )
+    repo_id = indexer_result["repo_id"]
+    repo_name = indexer_result["name"]
 
     doc_generate_service = DocGenerateService(
         session=db_session,

@@ -13,7 +13,9 @@ class Documentation(BaseModel):
     __tablename__ = "documentation"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    chunk_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), unique=True)
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("chunk.id", ondelete="CASCADE"), unique=True
+    )
     chunk: Mapped["Chunk"] = relationship(back_populates="documentation")
 
     short_summary: Mapped[str]
