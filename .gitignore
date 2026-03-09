@@ -212,5 +212,7 @@ __marimo__/
 repos/
 .hf/
 
+*.dump
+
 serviceAccountKey.json
 *.firebase-adminsdk*.json

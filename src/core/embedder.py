@@ -62,6 +62,7 @@ def get_tokenizer() -> "PreTrainedTokenizerBase":
                 trust_remote_code=True,
                 cache_dir=HF_HOME,
             )
+            _TOKENIZER.model_max_length = EMBEDDING_MAX_TOKENS
         return _TOKENIZER
 
 

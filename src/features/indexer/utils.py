@@ -1,23 +1,27 @@
-import os
 import hashlib
-from zipfile import ZipFile, ZipInfo
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from src.features.indexer.constants import *
 from tree_sitter import Node
-from sqlalchemy.orm import Session
-from typing import TypeVar
-from sqlalchemy.sql import Select
+from src.features.repositories.constants import REPOS_PATH
 from src.models_loader import Outline
-
-T = TypeVar("T")
 
 
 def normalize_repo_path(zip_entry: str) -> str:
     p = PurePosixPath(zip_entry)
     if len(p.parts) > 1:
         p = PurePosixPath(*p.parts[1:])
+    else:
+        return "root"
 
     return str(p)
+
+
+def is_root_readme(zip_entry: str) -> bool:
+    p = PurePosixPath(zip_entry)
+    if len(p.parts) != 2:
+        return False
+
+    return p.name.lower() in {"readme.md", "readme.rst", "readme.txt", "readme"}
 
 
 def module_from_path(path: str):
@@ -32,52 +36,12 @@ def normalize_newlines(s: str) -> str:
     return s.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def get_repo_path(repo_name: str) -> Path:
-    return Path(f"{REPOS_PATH}/{repo_name}.zip")
-
-
 def get_file_complete_path(file_path: str, repo_name: str) -> str:
     return f"{REPOS_PATH}/{repo_name}/{file_path}"
 
 
-def norm(p: str) -> str:
-    return p.replace("\\", "/").lower()
-
-
-def ext(file_path: str) -> str:
-    _, ext = os.path.splitext(file_path)
-    return ext.lower()
-
-
 def lang_from_ext(file_ext: str):
     return EXT_TO_LANG.get(file_ext.lower())
-
-
-def is_skipped(file_path: str) -> bool:
-    p = norm(file_path)
-    if p.endswith("/"):
-        return True
-    # if any(marker in p for marker in SKIP_DIR_MARKERS):
-    #     return True
-    if ext(p) in SKIP_EXT:
-        return True
-    return False
-
-
-def is_selected(file_path: str) -> bool:
-    p = norm(file_path)
-
-    base = os.path.basename(p)
-    if base in IMPORTANT_FILES_EXACT:
-        return True
-
-    if any(p.startswith(prefix) for prefix in IMPORTANT_PREFIXES):
-        return True
-
-    if ext(p) in AST_LANG_EXT or ext(p) in TEXT_LANG_EXT:
-        return True
-
-    return False
 
 
 def find_body(node: Node) -> Node | None:
@@ -158,28 +122,6 @@ def unwrap_node(wrapper: Node, lang: str | None = None):
     return None
 
 
-def is_binary(zip_file: ZipFile, info: ZipInfo, sample_size: int = 4096):
-    with zip_file.open(info) as f:
-        data = f.read(sample_size)
-
-        for magic in BINARY_FILE_MAGICS:
-            if data.startswith(magic):
-                return True
-    return False
-
-
-def hash_file_content(zip_file: ZipFile, info: ZipInfo):
-    BUF_SIZE = 65536
-    content_hash = hashlib.sha1()
-    with zip_file.open(info, "r") as f:
-        while True:
-            data = f.read(BUF_SIZE)
-            if not data:
-                break
-            content_hash.update(data)
-    return content_hash.hexdigest()
-
-
 def hash_text(text: str):
     normalized = text.replace("\r\n", "\n").strip()
     content_hash = hashlib.sha1()
@@ -187,19 +129,8 @@ def hash_text(text: str):
     return content_hash.hexdigest()
 
 
-def validate_sha(v: str) -> str:
-    if not SHA1_RE.match(v):
-        raise ValueError("SHA1 must be a 40-char hex")
-    return v
-
-
 def dict_to_text(d: dict[str, str]) -> str:
     return "\n".join(f"{k}: {v}" for k, v in d.items())
-
-
-def get_item_from_db(session: Session, stmt: Select[tuple[T]]) -> T | None:
-    result = session.execute(stmt).first()
-    return result[0] if result else None
 
 
 def outline_to_dict(outline: Outline):

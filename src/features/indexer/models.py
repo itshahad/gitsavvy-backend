@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Enum as SqlEnum, UniqueConstraint
+from sqlalchemy import ForeignKey, Enum as SqlEnum
 from typing import TYPE_CHECKING, List
 from enum import Enum
 from src.models import BaseModel
@@ -9,7 +8,9 @@ from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy.dialects.postgresql import JSONB
 
 if TYPE_CHECKING:
+    from src.features.repositories.models import File
     from src.features.documentation_generator.models import Documentation
+    from src.features.repositories.models import Repository
 
 
 class OutlineType(Enum):
@@ -28,7 +29,6 @@ class Outline:
 
 
 class ChunkType(Enum):
-    FUNCTION_INNER_BLOCK = "function_inner_block"
     FUNCTION = "function"
     CLASS_SUMMARY = "class_summary"
     FILE_SUMMARY = "file_summary"
@@ -36,95 +36,6 @@ class ChunkType(Enum):
 
 
 # ====================================================================
-
-
-class Repository(BaseModel):
-    __tablename__ = "repository"
-
-    __table_args__ = (UniqueConstraint("owner", "name", name="uq_repo"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    owner: Mapped[str] = mapped_column(String(30))
-    name: Mapped[str] = mapped_column(String(30))
-    description: Mapped[str] = mapped_column(nullable=True)
-    url: Mapped[str]
-    forks_count: Mapped[int] = mapped_column(nullable=True)
-    open_issues_count: Mapped[int] = mapped_column(nullable=True)
-    default_branch: Mapped[str] = mapped_column(String(30))
-    avatar_url: Mapped[str] = mapped_column(nullable=True)
-
-    files: Mapped[List["File"]] = relationship(
-        back_populates="repository", cascade="all, delete-orphan"
-    )
-
-    topics: Mapped[List["RepositoryTopic"]] = relationship(
-        back_populates="repository", cascade="all, delete-orphan"
-    )
-
-    chunks: Mapped[List["Chunk"]] = relationship(
-        back_populates="repository", cascade="all, delete-orphan"
-    )
-
-    modules: Mapped[List["Module"]] = relationship(
-        back_populates="repository", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"Repository(id={self.id!r}, owner={self.owner!r}, name={self.name!r}, description={self.description!r}, url={self.url!r}, forks_count={self.forks_count!r}, open_issues_count={self.open_issues_count!r}, default_branch={self.default_branch!r}, avatar_url={self.avatar_url!r})"
-
-
-# --------------------------------------------------------------
-
-
-class Module(BaseModel):
-    __tablename__ = "module"
-
-    __table_args__ = (UniqueConstraint("repository_id", "path"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="modules")
-
-    path: Mapped[str]
-
-    files: Mapped[List["File"]] = relationship(
-        back_populates="module", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, path={self.path!r})"
-
-
-# --------------------------------------------------------------
-
-
-class File(BaseModel):
-    __tablename__ = "file"
-
-    __table_args__ = (UniqueConstraint("repository_id", "file_path", name="uq_file"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="files")
-
-    module_id: Mapped[int] = mapped_column(ForeignKey("module.id"))
-    module: Mapped["Module"] = relationship(back_populates="files")
-
-    commit_sha: Mapped[str]
-    file_path: Mapped[str]
-    content_hash: Mapped[str] = mapped_column(nullable=True)
-
-    chunks: Mapped[List["Chunk"]] = relationship(
-        back_populates="file", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"File(id={self.id!r}, repository_id={self.repository_id!r}, commit_sha={self.commit_sha!r}, file_path={self.file_path!r}, content_hash={self.content_hash!r})"
-
-
-# --------------------------------------------------------------
 
 
 class Chunk(BaseModel):
@@ -135,7 +46,9 @@ class Chunk(BaseModel):
     file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))
     file: Mapped["File"] = relationship(back_populates="chunks")
 
-    repo_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
+    repo_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
     repository: Mapped["Repository"] = relationship(back_populates="chunks")
 
     chunk_parent_id: Mapped[int] = mapped_column(ForeignKey("chunk.id"), nullable=True)
@@ -149,7 +62,11 @@ class Chunk(BaseModel):
     start_byte: Mapped[int] = mapped_column(nullable=True)
     end_byte: Mapped[int] = mapped_column(nullable=True)
     type: Mapped["ChunkType"] = mapped_column(SqlEnum(ChunkType))
-    content_text: Mapped[str]
+
+    signature: Mapped["str"] = mapped_column(nullable=True)
+    language: Mapped["str"] = mapped_column(nullable=True)
+
+    content: Mapped[str]
     content_json: Mapped[list[dict[str, int | str]]] = mapped_column(
         JSONB, nullable=True
     )
@@ -164,7 +81,7 @@ class Chunk(BaseModel):
     )
 
     def __repr__(self):
-        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_byte={self.start_byte!r}, end_byte={self.end_byte!r}, type={self.type!r}, content_text={self.content_text!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
+        return f"Chunk(id={self.id!r}, repo_id={self.repo_id!r}, file_id={self.file_id!r}, chunk_parent_id={self.chunk_parent_id!r}, start_byte={self.start_byte!r}, end_byte={self.end_byte!r}, type={self.type!r}, content={self.content!r},content_json={self.content_json!r}, content_text_hash={self.content_text_hash!r})"
 
 
 # --------------------------------------------------------------
@@ -184,18 +101,3 @@ class ChunkEmbedding(BaseModel):
 
 
 # --------------------------------------------------------------
-
-
-class RepositoryTopic(BaseModel):
-    __tablename__ = "repository_topic"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    repository_id: Mapped[int] = mapped_column(ForeignKey("repository.id"))
-    repository: Mapped["Repository"] = relationship(back_populates="topics")
-
-    # UserId
-    topic: Mapped[str]
-
-    def __repr__(self):
-        return f"RepositoryTopic(id={self.id!r}, repository_id={self.repository_id!r}, topic={self.topic!r})"
