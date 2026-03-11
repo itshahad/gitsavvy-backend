@@ -211,6 +211,10 @@ class TopRepoContributors(BaseModel):
 class RepoMonthlyActivity(BaseModel):
     __tablename__ = "repo_monthly_activity"
 
+    __table_args__ = (
+        UniqueConstraint("repository_id", "month", name="uq_repo_month_activity"),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
 
     repository_id: Mapped[int] = mapped_column(

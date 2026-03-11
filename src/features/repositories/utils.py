@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 from pathlib import Path
@@ -116,3 +116,7 @@ def weekly_to_monthly_commit_activity(
         )
         for month, total in monthly.items()
     ]
+
+
+def is_stale(updated_at: datetime, stale_after: timedelta):
+    return datetime.now(timezone.utc) - updated_at > stale_after

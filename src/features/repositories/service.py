@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import time
 from typing import Any
 
@@ -5,7 +6,7 @@ import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
 from sqlalchemy.orm import Session, defer
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 
@@ -45,6 +46,7 @@ from src.features.repositories.utils import (
     is_binary,
     is_selected,
     is_skipped,
+    is_stale,
     weekly_to_monthly_commit_activity,
 )
 from src.models_loader import ContributorType
@@ -268,6 +270,8 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
+    REPO_STATS_STALE_AFTER = timedelta(hours=24)
+
     def get_repos(self):
         stmt = (
             select(Repository)
@@ -283,6 +287,20 @@ class ReposService:
             self.cached_repos[repo.id] = repo_read
         return repos_list
 
+    def get_repo_by_id(self, repo_id: int):
+        repo = self.cached_repos.get(repo_id, None)
+        if repo is None:
+            repo = self.db_session.get(
+                Repository,
+                repo_id,
+                options=[
+                    defer(Repository.readme_content),
+                ],
+            )
+        if repo is None:
+            raise ValueError(f"Repository with id {repo_id} was not found")
+        return repo
+
     def get_repo_readme(self, repo_id: int) -> str | None:
         stmt = select(Repository.readme_content).where(Repository.id == repo_id)
 
@@ -291,13 +309,138 @@ class ReposService:
         return readme
 
     def get_repo_stats(self, repo_id: int):
+        stats = self.db_session.scalar(
+            select(RepoStats).where(RepoStats.repository_id == repo_id)
+        )
+
+        if stats is None:
+            return self.create_repo_stats(repo_id=repo_id)
+
+        if is_stale(stats.updated_at, self.REPO_STATS_STALE_AFTER):
+            return self.refresh_repo_stats(repo_id=repo_id)
+
+        return self.read_repo_stats(repo_id=repo_id)
+
+    def read_repo_stats(self, repo_id: int) -> dict[str, Any]:
+        stats = self.db_session.scalar(
+            select(RepoStats).where(RepoStats.repository_id == repo_id)
+        )
+
+        if stats is None:
+            raise ValueError(f"Stats for repository with id {repo_id} were not found")
+
+        monthly_rows = list(
+            self.db_session.scalars(
+                select(RepoMonthlyActivity)
+                .where(RepoMonthlyActivity.repository_id == repo_id)
+                .order_by(RepoMonthlyActivity.month.asc())
+            )
+        )
+
+        contributor_rows = list(
+            self.db_session.scalars(
+                select(TopRepoContributors)
+                .where(TopRepoContributors.repository_id == repo_id)
+                .order_by(TopRepoContributors.num_of_contributions.desc())
+            )
+        )
+
+        return {
+            "stats": RepoStatsRead.model_validate(stats),
+            "monthly_activity": [
+                MonthlyActivityRead.model_validate(row) for row in monthly_rows
+            ],
+            "top_contributors": [
+                RepoContributorRead.model_validate(row) for row in contributor_rows
+            ],
+        }
+
+    def refresh_repo_stats(self, repo_id: int) -> dict[str, Any]:
         try:
-            repo = self.cached_repos.get(repo_id, None)
+            stats = self.db_session.scalar(
+                select(RepoStats).where(RepoStats.repository_id == repo_id)
+            )
+
+            if stats is None:
+                return self.create_repo_stats(repo_id=repo_id)
+
+            repo = self.cached_repos.get(repo_id)
             if repo is None:
                 repo = self.db_session.get(Repository, repo_id)
 
             if repo is None:
                 raise ValueError(f"Repository with id {repo_id} was not found")
+
+            stats.num_of_commits = (
+                self.compute_num_of_commits(owner=repo.owner, repo_name=repo.name) or 0
+            )
+            stats.num_of_merged_pr = self.compute_num_of_merged_pr(
+                owner=repo.owner, repo_name=repo.name
+            )
+            stats.num_of_closed_issues = self.compute_num_of_closed_issues(
+                owner=repo.owner, repo_name=repo.name
+            )
+            stats.num_of_contributors = (
+                self.compute_num_of_contributors(owner=repo.owner, repo_name=repo.name)
+                or 0
+            )
+
+            stats.updated_at = datetime.now(timezone.utc)
+
+            self.db_session.execute(
+                delete(RepoMonthlyActivity).where(
+                    RepoMonthlyActivity.repository_id == repo_id
+                )
+            )
+            self.db_session.execute(
+                delete(TopRepoContributors).where(
+                    TopRepoContributors.repository_id == repo_id
+                )
+            )
+
+            monthly_activity = self.compute_monthly_commit_activity(
+                owner=repo.owner, repo_name=repo.name
+            )
+            if monthly_activity:
+                self.db_session.add_all(
+                    [
+                        RepoMonthlyActivity(
+                            repository_id=repo.id,
+                            **item.model_dump(),
+                        )
+                        for item in monthly_activity
+                    ]
+                )
+
+            top_contributors = self.get_top_contributors(
+                owner=repo.owner, repo_name=repo.name
+            )
+            if top_contributors:
+                self.db_session.add_all(
+                    [
+                        TopRepoContributors(
+                            repository_id=repo.id,
+                            **item.model_dump(exclude={"avatar_url"}),
+                            avatar_url=(
+                                str(item.avatar_url)
+                                if item.avatar_url is not None
+                                else None
+                            ),
+                        )
+                        for item in top_contributors
+                    ]
+                )
+
+            self.db_session.commit()
+            return self.read_repo_stats(repo_id=repo_id)
+
+        except Exception:
+            self.db_session.rollback()
+            raise
+
+    def create_repo_stats(self, repo_id: int):
+        try:
+            repo = self.get_repo_by_id(repo_id=repo_id)
 
             num_of_commits = self.compute_num_of_commits(
                 owner=repo.owner, repo_name=repo.name
@@ -354,25 +497,7 @@ class ReposService:
                 self.db_session.add_all(contributor_rows)
 
             self.db_session.commit()
-
-            self.db_session.refresh(stats)
-            for row in monthly_rows:
-                self.db_session.refresh(row)
-            for row in contributor_rows:
-                self.db_session.refresh(row)
-
-            res: dict[str, Any] = {
-                "stats": RepoStatsRead.model_validate(stats),
-                "monthly_activity": [
-                    MonthlyActivityRead.model_validate(act) for act in monthly_rows
-                ],
-                "top_contributors": [
-                    RepoContributorRead.model_validate(cont)
-                    for cont in contributor_rows
-                ],
-            }
-
-            return res
+            return self.read_repo_stats(repo_id=repo_id)
 
         except Exception:
             self.db_session.rollback()
