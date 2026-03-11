@@ -250,7 +250,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"typer\"\r\n}",
+              "raw": "{\r\n    \"repo_owner\": \"git-savvy\",\r\n    \"repo_name\": \"test\"\r\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -318,6 +318,146 @@
               ],
               "path": [
                 "repositories"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "get repositories list",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+                },
+                "url": {
+                  "raw": "{{url}}/repositories",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "repositories"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sat, 07 Mar 2026 18:31:30 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "994"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"data\": [\n        {\n            \"owner\": \"codeplea\",\n            \"name\": \"tinyexpr\",\n            \"description\": \"tiny recursive descent expression parser, compiler, and evaluation engine for math expressions\",\n            \"forks_count\": 288,\n            \"open_issues_count\": 37,\n            \"default_branch\": \"master\",\n            \"avatar_url\": null,\n            \"id\": 1,\n            \"url\": \"https://api.github.com/repos/codeplea/tinyexpr\",\n            \"topics\": []\n        },\n        {\n            \"owner\": \"fastapi\",\n            \"name\": \"typer\",\n            \"description\": \"Typer, build great CLIs. Easy to code. Based on Python type hints.\",\n            \"forks_count\": 852,\n            \"open_issues_count\": 63,\n            \"default_branch\": \"master\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/156354296?v=4\",\n            \"id\": 2,\n            \"url\": \"https://api.github.com/repos/fastapi/typer\",\n            \"topics\": [\n                {\n                    \"id\": 1,\n                    \"repository_id\": 2,\n                    \"topic\": \"cli\"\n                },\n                {\n                    \"id\": 2,\n                    \"repository_id\": 2,\n                    \"topic\": \"click\"\n                },\n                {\n                    \"id\": 3,\n                    \"repository_id\": 2,\n                    \"topic\": \"python\"\n                },\n                {\n                    \"id\": 4,\n                    \"repository_id\": 2,\n                    \"topic\": \"python3\"\n                },\n                {\n                    \"id\": 5,\n                    \"repository_id\": 2,\n                    \"topic\": \"shell\"\n                },\n                {\n                    \"id\": 6,\n                    \"repository_id\": 2,\n                    \"topic\": \"terminal\"\n                },\n                {\n                    \"id\": 7,\n                    \"repository_id\": 2,\n                    \"topic\": \"typehints\"\n                },\n                {\n                    \"id\": 8,\n                    \"repository_id\": 2,\n                    \"topic\": \"typer\"\n                }\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "get repo by id",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+            },
+            "url": {
+              "raw": "{{url}}/repositories/{{repo_id}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "repositories",
+                "{{repo_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "get repositories list",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+                },
+                "url": {
+                  "raw": "{{url}}/repositories",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "repositories"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Sat, 07 Mar 2026 18:31:30 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "uvicorn"
+                },
+                {
+                  "key": "content-length",
+                  "value": "994"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"data\": [\n        {\n            \"owner\": \"codeplea\",\n            \"name\": \"tinyexpr\",\n            \"description\": \"tiny recursive descent expression parser, compiler, and evaluation engine for math expressions\",\n            \"forks_count\": 288,\n            \"open_issues_count\": 37,\n            \"default_branch\": \"master\",\n            \"avatar_url\": null,\n            \"id\": 1,\n            \"url\": \"https://api.github.com/repos/codeplea/tinyexpr\",\n            \"topics\": []\n        },\n        {\n            \"owner\": \"fastapi\",\n            \"name\": \"typer\",\n            \"description\": \"Typer, build great CLIs. Easy to code. Based on Python type hints.\",\n            \"forks_count\": 852,\n            \"open_issues_count\": 63,\n            \"default_branch\": \"master\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/156354296?v=4\",\n            \"id\": 2,\n            \"url\": \"https://api.github.com/repos/fastapi/typer\",\n            \"topics\": [\n                {\n                    \"id\": 1,\n                    \"repository_id\": 2,\n                    \"topic\": \"cli\"\n                },\n                {\n                    \"id\": 2,\n                    \"repository_id\": 2,\n                    \"topic\": \"click\"\n                },\n                {\n                    \"id\": 3,\n                    \"repository_id\": 2,\n                    \"topic\": \"python\"\n                },\n                {\n                    \"id\": 4,\n                    \"repository_id\": 2,\n                    \"topic\": \"python3\"\n                },\n                {\n                    \"id\": 5,\n                    \"repository_id\": 2,\n                    \"topic\": \"shell\"\n                },\n                {\n                    \"id\": 6,\n                    \"repository_id\": 2,\n                    \"topic\": \"terminal\"\n                },\n                {\n                    \"id\": 7,\n                    \"repository_id\": 2,\n                    \"topic\": \"typehints\"\n                },\n                {\n                    \"id\": 8,\n                    \"repository_id\": 2,\n                    \"topic\": \"typer\"\n                }\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "get repo stat",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"repo_owner\": \"fastapi\",\r\n    \"repo_name\": \"fastapi\"\r\n}"
+            },
+            "url": {
+              "raw": "{{url}}/repositories/{{repo_id}}/stats/",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "repositories",
+                "{{repo_id}}",
+                "stats",
+                ""
               ]
             }
           },
