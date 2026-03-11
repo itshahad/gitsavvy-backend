@@ -12,7 +12,7 @@ class UserBase(BaseModel):
     username: str
     github_id: int
     name: str | None = None
-
+    role: str
 
 class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)

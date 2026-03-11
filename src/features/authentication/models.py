@@ -1,8 +1,7 @@
-#########################FR Auth #################################
 
 from sqlalchemy import String, Integer
 from sqlalchemy.orm import Mapped, mapped_column
-from database import engine, Base
+from src.database import engine, Base
 
 class User(Base):
     __tablename__ = "user"
@@ -18,3 +17,5 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     
     github_access_token_enc: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="user")

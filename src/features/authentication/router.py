@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db
-from authentication.schemas import GitHubSyncRequest, UserRead
-from authentication.services import sync_user_first_login
-from authentication.dependencies import get_current_claims, get_current_user
+# from database import get_db
+from src.database import get_db
+# from authentication.schemas import GitHubSyncRequest, UserRead
+from src.features.authentication.schemas import GitHubSyncRequest, UserRead
+from src.features.authentication.services import sync_user_first_login
+from src.features.authentication.dependencies import get_current_claims, get_current_user, get_current_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,3 +35,14 @@ def github_sync(
 @router.get("/me", response_model=UserRead)
 def me(user=Depends(get_current_user)):
     return user
+
+@router.get("/admin/test")
+def admin_test(admin = Depends(get_current_admin)):
+    return {"message": "Admin access granted"}
+
+# @router.get("/admin/dashboard")
+# def admin_dashboard(admin=Depends(get_current_admin)):
+#     return {
+#         "message": "Welcome admin",
+#         "admin_username": admin.username
+#     }    
