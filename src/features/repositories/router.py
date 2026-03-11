@@ -1,12 +1,15 @@
 from celery import chain  # type: ignore
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from requests import Session as http_session
+
 
 # import requests
 from src.database import get_db
 from src.exceptions import DatabaseError
 from src.features.documentation_generator.tasks import docs_generator
 from src.features.indexer.tasks import IndexerResult, chunk_repo, index_repo
+from src.features.repositories.dependencies import get_http_session
 from src.features.repositories.schemas import RepoRequest
 from src.features.repositories.service import ReposService
 from src.features.repositories.tasks import download_repo
@@ -65,6 +68,19 @@ def get_repositories(
         raise HTTPException(status_code=500, detail="Database Error") from e
 
 
+@router.get("/{repo_id}")
+def get_repo_by_id(
+    repo_id: int,
+    db: Session = Depends(get_db),
+):
+    repos_service = ReposService(db_session=db)
+    try:
+        repo = repos_service.get_repo_by_id(repo_id=repo_id)
+        return {"data": repo}
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
 @router.get("/{repo_id}/README")
 def get_repository_readme(
     repo_id: int,
@@ -75,5 +91,20 @@ def get_repository_readme(
         readme = repos_service.get_repo_readme(repo_id=repo_id)
         result: dict[str, str | int | None] = {"repo_id": repo_id, "readme": readme}
         return result
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/stats")
+def get_repository_stats(
+    repo_id: int,
+    db: Session = Depends(get_db),
+    http: http_session = Depends(get_http_session),
+):
+    repos_service = ReposService(db_session=db, http_session=http)
+    try:
+        stats = repos_service.get_repo_stats(repo_id=repo_id)
+        # result: dict[str, str | int | None] = {"repo_id": repo_id, "stats": stats}
+        return stats
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e

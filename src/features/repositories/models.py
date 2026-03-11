@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import TYPE_CHECKING, List
 
 from src.models import BaseModel
@@ -44,6 +45,18 @@ class Repository(BaseModel):
     )
 
     modules: Mapped[List["Module"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    repo_stats: Mapped[List["RepoStats"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    top_repo_contributors: Mapped[List["TopRepoContributors"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    repo_monthly_activity: Mapped[List["RepoMonthlyActivity"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )
 
@@ -139,3 +152,80 @@ class File(BaseModel):
 
 
 # --------------------------------------------------------------
+
+
+class RepoStats(BaseModel):
+    __tablename__ = "repo_stats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
+    repository: Mapped["Repository"] = relationship(back_populates="repo_stats")
+
+    num_of_commits: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    num_of_merged_pr: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    num_of_closed_issues: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    num_of_contributors: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+
+    def __repr__(self):
+        return f"repository_id(id={self.repository_id!r}, num_of_commits={self.num_of_commits!r}, num_of_merged_pr={self.num_of_merged_pr!r}, num_of_closed_issues={self.num_of_closed_issues!r}, num_of_contributors={self.num_of_contributors!r})"
+
+
+# --------------------------------------------------------------
+class ContributorType(Enum):
+    User = "user"
+    Anonymous = "anonymous"
+
+
+class TopRepoContributors(BaseModel):
+    __tablename__ = "top_repo_contributors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
+    repository: Mapped["Repository"] = relationship(
+        back_populates="top_repo_contributors"
+    )
+
+    name: Mapped[str]
+    avatar_url: Mapped[str] = mapped_column(nullable=True)
+    num_of_contributions: Mapped[int]
+    type: Mapped[ContributorType]
+
+    def __repr__(self):
+        return f"repository_id(id={self.repository_id!r}, name={self.name!r}, avatar_url={self.avatar_url!r}, num_of_contributions={self.num_of_contributions!r})"
+
+
+class RepoMonthlyActivity(BaseModel):
+    __tablename__ = "repo_monthly_activity"
+
+    __table_args__ = (
+        UniqueConstraint("repository_id", "month", name="uq_repo_month_activity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
+    repository: Mapped["Repository"] = relationship(
+        back_populates="repo_monthly_activity"
+    )
+
+    month: Mapped[str]
+    num_of_contributions: Mapped[int] = mapped_column(server_default="0", default=0)
+
+    def __repr__(self):
+        return f"repository_id(id={self.repository_id!r}, month={self.month!r}, num_of_contributions={self.num_of_contributions!r})"

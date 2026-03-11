@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
 from pydantic.aliases import AliasPath
 
 from src.core.validators import validate_sha
+from src.features.repositories.models import ContributorType
 
 
 # ====================================================================
@@ -92,6 +93,66 @@ class FileCreate(RepoFileModel):
 
 
 class FileRead(RepoFileModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ====================================================================
+
+
+class RepoStatsModel(BaseModel):
+    repository_id: int
+    num_of_commits: int
+    num_of_merged_pr: int
+    num_of_closed_issues: int
+    num_of_contributors: int
+
+
+class RepoStatsCreate(RepoStatsModel):
+    pass
+
+
+class RepoStatsRead(RepoStatsModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ====================================================================
+
+
+class TopRepoContributorsModel(BaseModel):
+    avatar_url: HttpUrl | None = Field(default=None)
+    num_of_contributions: int = Field(validation_alias=AliasPath("contributions"))
+    type: ContributorType
+
+
+class AnonContributorsCreate(TopRepoContributorsModel):
+    name: str
+
+
+class UserContributorsCreate(TopRepoContributorsModel):
+    name: str = Field(validation_alias=AliasPath("login"))
+
+
+class RepoContributorRead(TopRepoContributorsModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    num_of_contributions: int
+
+
+# ====================================================================
+
+
+class RepoMonthlyActivityModel(BaseModel):
+    month: str
+    num_of_contributions: int = Field(default=0)
+
+
+class MonthlyActivityCreate(RepoMonthlyActivityModel):
+    pass
+
+
+class MonthlyActivityRead(RepoMonthlyActivityModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
 
