@@ -1,7 +1,10 @@
+from collections import defaultdict
+from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
-from typing import TypeVar
+import re
+from typing import Any, TypeVar
 from zipfile import ZipFile, ZipInfo
 
 from sqlalchemy.orm import Session
@@ -16,6 +19,7 @@ from src.features.repositories.constants import (
     SKIP_EXT,
     TEXT_LANG_EXT,
 )
+from src.features.repositories.schemas import MonthlyActivityCreate
 
 T = TypeVar("T")
 
@@ -85,3 +89,30 @@ def hash_file_content(zip_file: ZipFile, info: ZipInfo):
                 break
             content_hash.update(data)
     return content_hash.hexdigest()
+
+
+def extract_last_page_count(link_header: str) -> int | None:
+    match = re.search(r'[?&]page=(\d+)>; rel="last"', link_header)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def weekly_to_monthly_commit_activity(
+    weeks: list[dict[str, Any]],
+) -> list[MonthlyActivityCreate]:
+
+    monthly: dict[str, int] = defaultdict(int)
+
+    for item in weeks:
+        month_key = datetime.fromtimestamp(item["week"], timezone.utc).strftime("%Y-%m")
+
+        monthly[month_key] += item["total"]
+
+    return [
+        MonthlyActivityCreate(
+            month=month,
+            num_of_contributions=total,
+        )
+        for month, total in monthly.items()
+    ]
