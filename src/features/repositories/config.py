@@ -5,11 +5,11 @@ GITHUB_API_TOKEN = os.getenv("GITHUB_API_TOKEN")
 
 
 def headers():
-    return {"Accept": "application/vnd.github+json"}
-    # if not GITHUB_API_TOKEN:
-    #     return {"Accept": "application/vnd.github+json"}
-    # else:
-    #     return {
-    #         "Accept": "application/vnd.github+json",
-    #         "Authorization": f"Bearer {GITHUB_API_TOKEN}",
-    #     }
+    # return {"Accept": "application/vnd.github+json"}
+    if not GITHUB_API_TOKEN:
+        return {"Accept": "application/vnd.github+json"}
+    else:
+        return {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"token {GITHUB_API_TOKEN}",
+        }

@@ -183,8 +183,9 @@ class RepoStats(BaseModel):
 
 # --------------------------------------------------------------
 class ContributorType(Enum):
-    User = "user"
-    Anonymous = "anonymous"
+    User = "User"
+    Anonymous = "Anonymous"
+    Bot = "Bot"
 
 
 class TopRepoContributors(BaseModel):

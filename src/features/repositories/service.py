@@ -270,7 +270,7 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
-    REPO_STATS_STALE_AFTER = timedelta(hours=24)
+    REPO_STATS_STALE_AFTER = timedelta(days=5)
 
     def get_repos(self):
         stmt = (
@@ -431,8 +431,10 @@ class ReposService:
                     ]
                 )
 
+            result = self.read_repo_stats(repo_id=repo_id)
+
             self.db_session.commit()
-            return self.read_repo_stats(repo_id=repo_id)
+            return result
 
         except Exception:
             self.db_session.rollback()
@@ -588,7 +590,7 @@ class ReposService:
 
             weekly_activity: list[Any] = []
 
-            for _ in range(5):
+            for _ in range(8):
                 r = self.http_session.get(url, headers=headers())
 
                 if r.status_code == 202:
@@ -600,7 +602,7 @@ class ReposService:
 
                 r.raise_for_status()
                 weekly_activity = r.json()
-
+            print(weekly_activity)
             if len(weekly_activity) != 0:
                 monthly_activity = weekly_to_monthly_commit_activity(weekly_activity)
                 return monthly_activity
@@ -626,16 +628,18 @@ class ReposService:
             data = r.json()
 
             for cont in data:
-                type = (
-                    ContributorType.User
-                    if cont["type"] == "User"
-                    else ContributorType.Anonymous
-                )
-                if type == ContributorType.User:
+                if cont["type"] == "User":
+                    type = ContributorType.User
+                elif cont["type"] == "Bot":
+                    type = ContributorType.Bot
+                else:
+                    type = ContributorType.Anonymous
+
+                if type == ContributorType.User or type == ContributorType.Bot:
                     contributors.append(
                         UserContributorsCreate.model_validate({**cont, "type": type})
                     )
-                else:
+                elif type == ContributorType.Anonymous:
                     contributors.append(
                         AnonContributorsCreate.model_validate({**cont, "type": type})
                     )
