@@ -8,6 +8,13 @@
 
 ## 3- run the command `docker-compose up -d --build` in terminal
 
+# How to load database `backup.dump` file? 
+* add the dump file to `postgres` folder
+* in docker: remove the postgres container and pgdata volume
+* in vscode terminal: run the command `docker compose up -d --no-recreate` 
+* open docker, in the running **postgres container**, go to `Exec` and run the following command:  
+  `pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges /docker-entrypoint-initdb.d/backup.dump`
+
 # How to access docs? 
 
 ## 1- for swagger docs:

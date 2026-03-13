@@ -1,8 +1,12 @@
+from datetime import datetime, timedelta, timezone
+import time
+from typing import Any
+
 import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
 from sqlalchemy.orm import Session, defer
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 
@@ -10,23 +14,42 @@ from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPOS_PATH
 from src.features.repositories.exceptions import raise_request_exception
-from src.features.repositories.models import File, Module, Repository, RepositoryTopic
+from src.features.repositories.models import (
+    File,
+    Module,
+    RepoMonthlyActivity,
+    RepoStats,
+    Repository,
+    RepositoryTopic,
+    TopRepoContributors,
+)
 from src.features.repositories.schemas import (
+    AnonContributorsCreate,
     FileCreate,
     FileRead,
     ModuleCreate,
     ModuleRead,
+    MonthlyActivityCreate,
+    MonthlyActivityRead,
+    RepoContributorRead,
     RepoCreate,
     RepoRead,
+    RepoStatsCreate,
+    RepoStatsRead,
+    UserContributorsCreate,
 )
 from src.features.repositories.utils import (
+    extract_last_page_count,
     get_item_from_db,
     get_repo_path,
     hash_file_content,
     is_binary,
     is_selected,
     is_skipped,
+    is_stale,
+    weekly_to_monthly_commit_activity,
 )
+from src.models_loader import ContributorType
 
 
 class RepoProcessingService:
@@ -240,10 +263,14 @@ class ReposService:
     def __init__(
         self,
         db_session: Session,
+        http_session: requests.Session | None = None,
     ) -> None:
         self.db_session = db_session
+        self.http_session = http_session
 
     cached_repos: dict[int, RepoRead] = {}
+
+    REPO_STATS_STALE_AFTER = timedelta(hours=24)
 
     def get_repos(self):
         stmt = (
@@ -260,9 +287,359 @@ class ReposService:
             self.cached_repos[repo.id] = repo_read
         return repos_list
 
+    def get_repo_by_id(self, repo_id: int):
+        repo = self.cached_repos.get(repo_id, None)
+        if repo is None:
+            repo = self.db_session.get(
+                Repository,
+                repo_id,
+                options=[
+                    defer(Repository.readme_content),
+                ],
+            )
+        if repo is None:
+            raise ValueError(f"Repository with id {repo_id} was not found")
+        return repo
+
     def get_repo_readme(self, repo_id: int) -> str | None:
         stmt = select(Repository.readme_content).where(Repository.id == repo_id)
 
         readme = self.db_session.execute(stmt).scalar_one_or_none()
 
         return readme
+
+    def get_repo_stats(self, repo_id: int):
+        stats = self.db_session.scalar(
+            select(RepoStats).where(RepoStats.repository_id == repo_id)
+        )
+
+        if stats is None:
+            return self.create_repo_stats(repo_id=repo_id)
+
+        if is_stale(stats.updated_at, self.REPO_STATS_STALE_AFTER):
+            return self.refresh_repo_stats(repo_id=repo_id)
+
+        return self.read_repo_stats(repo_id=repo_id)
+
+    def read_repo_stats(self, repo_id: int) -> dict[str, Any]:
+        stats = self.db_session.scalar(
+            select(RepoStats).where(RepoStats.repository_id == repo_id)
+        )
+
+        if stats is None:
+            raise ValueError(f"Stats for repository with id {repo_id} were not found")
+
+        monthly_rows = list(
+            self.db_session.scalars(
+                select(RepoMonthlyActivity)
+                .where(RepoMonthlyActivity.repository_id == repo_id)
+                .order_by(RepoMonthlyActivity.month.asc())
+            )
+        )
+
+        contributor_rows = list(
+            self.db_session.scalars(
+                select(TopRepoContributors)
+                .where(TopRepoContributors.repository_id == repo_id)
+                .order_by(TopRepoContributors.num_of_contributions.desc())
+            )
+        )
+
+        return {
+            "stats": RepoStatsRead.model_validate(stats),
+            "monthly_activity": [
+                MonthlyActivityRead.model_validate(row) for row in monthly_rows
+            ],
+            "top_contributors": [
+                RepoContributorRead.model_validate(row) for row in contributor_rows
+            ],
+        }
+
+    def refresh_repo_stats(self, repo_id: int) -> dict[str, Any]:
+        try:
+            stats = self.db_session.scalar(
+                select(RepoStats).where(RepoStats.repository_id == repo_id)
+            )
+
+            if stats is None:
+                return self.create_repo_stats(repo_id=repo_id)
+
+            repo = self.cached_repos.get(repo_id)
+            if repo is None:
+                repo = self.db_session.get(Repository, repo_id)
+
+            if repo is None:
+                raise ValueError(f"Repository with id {repo_id} was not found")
+
+            stats.num_of_commits = (
+                self.compute_num_of_commits(owner=repo.owner, repo_name=repo.name) or 0
+            )
+            stats.num_of_merged_pr = self.compute_num_of_merged_pr(
+                owner=repo.owner, repo_name=repo.name
+            )
+            stats.num_of_closed_issues = self.compute_num_of_closed_issues(
+                owner=repo.owner, repo_name=repo.name
+            )
+            stats.num_of_contributors = (
+                self.compute_num_of_contributors(owner=repo.owner, repo_name=repo.name)
+                or 0
+            )
+
+            stats.updated_at = datetime.now(timezone.utc)
+
+            self.db_session.execute(
+                delete(RepoMonthlyActivity).where(
+                    RepoMonthlyActivity.repository_id == repo_id
+                )
+            )
+            self.db_session.execute(
+                delete(TopRepoContributors).where(
+                    TopRepoContributors.repository_id == repo_id
+                )
+            )
+
+            monthly_activity = self.compute_monthly_commit_activity(
+                owner=repo.owner, repo_name=repo.name
+            )
+            if monthly_activity:
+                self.db_session.add_all(
+                    [
+                        RepoMonthlyActivity(
+                            repository_id=repo.id,
+                            **item.model_dump(),
+                        )
+                        for item in monthly_activity
+                    ]
+                )
+
+            top_contributors = self.get_top_contributors(
+                owner=repo.owner, repo_name=repo.name
+            )
+            if top_contributors:
+                self.db_session.add_all(
+                    [
+                        TopRepoContributors(
+                            repository_id=repo.id,
+                            **item.model_dump(exclude={"avatar_url"}),
+                            avatar_url=(
+                                str(item.avatar_url)
+                                if item.avatar_url is not None
+                                else None
+                            ),
+                        )
+                        for item in top_contributors
+                    ]
+                )
+
+            self.db_session.commit()
+            return self.read_repo_stats(repo_id=repo_id)
+
+        except Exception:
+            self.db_session.rollback()
+            raise
+
+    def create_repo_stats(self, repo_id: int):
+        try:
+            repo = self.get_repo_by_id(repo_id=repo_id)
+
+            num_of_commits = self.compute_num_of_commits(
+                owner=repo.owner, repo_name=repo.name
+            )
+            num_of_merged_pr = self.compute_num_of_merged_pr(
+                owner=repo.owner, repo_name=repo.name
+            )
+            num_of_closed_issues = self.compute_num_of_closed_issues(
+                owner=repo.owner, repo_name=repo.name
+            )
+            num_of_contributors = self.compute_num_of_contributors(
+                owner=repo.owner, repo_name=repo.name
+            )
+
+            stats_create = RepoStatsCreate(
+                repository_id=repo.id,
+                num_of_closed_issues=num_of_closed_issues,
+                num_of_commits=num_of_commits if num_of_commits is not None else 0,
+                num_of_contributors=(
+                    num_of_contributors if num_of_contributors is not None else 0
+                ),
+                num_of_merged_pr=num_of_merged_pr,
+            )
+
+            stats = RepoStats(**stats_create.model_dump())
+            self.db_session.add(stats)
+
+            monthly_activity = self.compute_monthly_commit_activity(
+                owner=repo.owner, repo_name=repo.name
+            )
+
+            monthly_rows: list[RepoMonthlyActivity] = []
+            if monthly_activity is not None:
+                monthly_rows = [
+                    RepoMonthlyActivity(repository_id=repo.id, **item.model_dump())
+                    for item in monthly_activity
+                ]
+                self.db_session.add_all(monthly_rows)
+
+            top_contributors = self.get_top_contributors(
+                owner=repo.owner, repo_name=repo.name
+            )
+
+            contributor_rows: list[TopRepoContributors] = []
+            if len(top_contributors) != 0:
+                contributor_rows = [
+                    TopRepoContributors(
+                        repository_id=repo.id,
+                        **item.model_dump(exclude={"avatar_url"}),
+                        avatar_url=str(item.avatar_url),
+                    )
+                    for item in top_contributors
+                ]
+                self.db_session.add_all(contributor_rows)
+
+            self.db_session.commit()
+            return self.read_repo_stats(repo_id=repo_id)
+
+        except Exception:
+            self.db_session.rollback()
+            raise
+
+    def compute_num_of_commits(self, owner: str, repo_name: str):
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+        try:
+            r = self.http_session.get(
+                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/commits",
+                headers=headers(),
+                params={"per_page": 1},
+            )
+            r.raise_for_status()
+
+            link = r.headers.get("Link")
+
+            if not link:
+                return len(r.json())
+
+            count = extract_last_page_count(link_header=link)
+            return count
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+
+    def compute_num_of_merged_pr(self, owner: str, repo_name: str):
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+        try:
+            r = self.http_session.get(
+                f"{API_URL}/search/issues",
+                params={"q": f"repo:{owner}/{repo_name} is:pr is:merged"},
+                headers=headers(),
+            )
+            r.raise_for_status()
+
+            data = r.json()
+            return int(data["total_count"])
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+
+    def compute_num_of_closed_issues(self, owner: str, repo_name: str):
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+        try:
+            r = self.http_session.get(
+                f"{API_URL}/search/issues",
+                params={"q": f"repo:{owner}/{repo_name} is:issue is:closed"},
+                headers=headers(),
+            )
+            r.raise_for_status()
+
+            data = r.json()
+            return int(data["total_count"])
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+
+    def compute_num_of_contributors(self, owner: str, repo_name: str):
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+        try:
+            r = self.http_session.get(
+                f"{API_URL}/repos/{owner}/{repo_name}/contributors",
+                headers=headers(),
+                params={"per_page": 1, "anon": "true"},
+            )
+            r.raise_for_status()
+
+            link = r.headers.get("Link")
+
+            if not link:
+                return len(r.json())
+
+            count = extract_last_page_count(link_header=link)
+            return count
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+
+    def compute_monthly_commit_activity(
+        self, owner: str, repo_name: str
+    ) -> list[MonthlyActivityCreate] | None:
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+
+        try:
+            url = f"{API_URL}/repos/{owner}/{repo_name}/stats/commit_activity"
+
+            weekly_activity: list[Any] = []
+
+            for _ in range(5):
+                r = self.http_session.get(url, headers=headers())
+
+                if r.status_code == 202:
+                    time.sleep(2)
+                    continue
+
+                if r.status_code == 204:
+                    weekly_activity = []
+
+                r.raise_for_status()
+                weekly_activity = r.json()
+
+            if len(weekly_activity) != 0:
+                monthly_activity = weekly_to_monthly_commit_activity(weekly_activity)
+                return monthly_activity
+
+            return None
+
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+
+    def get_top_contributors(self, owner: str, repo_name: str, limit: int = 5):
+        if self.http_session is None:
+            raise ValueError("HTTP Session is not initialized")
+        try:
+            r = self.http_session.get(
+                f"{API_URL}/repos/{owner}/{repo_name}/contributors",
+                headers=headers(),
+                params={"per_page": limit, "anon": "true"},
+            )
+            r.raise_for_status()
+
+            contributors: list[UserContributorsCreate | AnonContributorsCreate] = []
+
+            data = r.json()
+
+            for cont in data:
+                type = (
+                    ContributorType.User
+                    if cont["type"] == "User"
+                    else ContributorType.Anonymous
+                )
+                if type == ContributorType.User:
+                    contributors.append(
+                        UserContributorsCreate.model_validate({**cont, "type": type})
+                    )
+                else:
+                    contributors.append(
+                        AnonContributorsCreate.model_validate({**cont, "type": type})
+                    )
+
+            return contributors
+        except Exception as e:
+            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
