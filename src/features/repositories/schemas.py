@@ -135,6 +135,7 @@ class UserContributorsCreate(TopRepoContributorsModel):
 
 
 class RepoContributorRead(TopRepoContributorsModel):
+    name: str
     model_config = ConfigDict(from_attributes=True)
     id: int
     num_of_contributions: int
