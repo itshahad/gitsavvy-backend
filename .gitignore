@@ -211,4 +211,8 @@ __marimo__/
 #downloaded files
 repos/
 .hf/
+
 *.dump
+
+serviceAccountKey.json
+*.firebase-adminsdk*.json

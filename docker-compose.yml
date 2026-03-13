@@ -27,6 +27,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
+      FIREBASE_CREDENTIALS_PATH: /usr/src/app/src/serviceAccountKey.json
     working_dir: /usr/src/app
     ports:
       - "8000:8000"
@@ -34,7 +35,6 @@ services:
       - .env
     depends_on:
       - db
-
   redis:
       image: redis:7-alpine
       ports:

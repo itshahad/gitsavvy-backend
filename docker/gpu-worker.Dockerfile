@@ -13,7 +13,7 @@ RUN pip install --upgrade pip
 COPY ./src/requirements.txt /usr/src/app/requirements.txt
 COPY ./src/requirements-gpu.txt /usr/src/app/requirements-gpu.txt
 RUN pip install  --no-cache-dir -r requirements.txt
-RUN pip install  --no-cache-dir -r requirements-gpu.txt --extra-index-url https://download.pytorch.org/whl/cu126
+RUN pip install  --no-cache-dir -r requirements-gpu.txt --extra-index-url https://download.pytorch.org/whl/cu128
 
 # Copy the app code
 COPY . /usr/src/app/

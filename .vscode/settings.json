@@ -11,6 +11,7 @@
         "dotenv",
         "embedder",
         "embs",
+        "Fernet",
         "HUGGINGFACE",
         "keepdim",
         "onupdate",
