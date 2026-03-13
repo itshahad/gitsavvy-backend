@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class GitHubUser(BaseModel):
     username: str = Field(alias="login", max_length=100)
     github_id: int = Field(alias="id")
@@ -14,27 +15,17 @@ class UserBase(BaseModel):
     name: str | None = None
     role: str
 
+
 class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
 
+
 class GitHubSyncRequest(BaseModel):
-    github_access_token: str    
-
-# from pydantic import BaseModel, ConfigDict
-
-
-# class UserBase(BaseModel):
-#     username: str
-#     github_id: int
-#     name: str | None = None
-
-
-# class UserRead(UserBase):
-#     model_config = ConfigDict(from_attributes=True)
-#     id: int
+    github_access_token: str

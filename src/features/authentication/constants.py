@@ -1,4 +1,1 @@
-#module specific constants and error codes
-
-# DEFAULT_LIMIT = 10
-# FEATURE_NAME = "users"
+GITHUB_USER_API = "https://api.github.com/user"
