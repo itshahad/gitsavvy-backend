@@ -60,6 +60,10 @@ class Repository(BaseModel):
         back_populates="repository", cascade="all, delete-orphan"
     )
 
+    issues: Mapped[List["RepoMonthlyActivity"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
     readme_content: Mapped[str] = mapped_column(nullable=True)
 
     def __repr__(self):
