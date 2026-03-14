@@ -2,11 +2,13 @@ from datetime import datetime, timedelta, timezone
 import time
 from typing import Any
 
+from fastapi import BackgroundTasks
 import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
 from sqlalchemy.orm import Session, defer
 from sqlalchemy import delete, select
+from src.database import SessionLocal
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 
@@ -259,6 +261,17 @@ class RepoProcessingService:
         return self.cashed_modules[key]
 
 
+def refresh_repo_stats_task(repo_id: int):
+    db = SessionLocal()
+    http = requests.session()
+    try:
+        service = ReposService(db_session=db, http_session=http)
+        service.refresh_repo_stats(repo_id=repo_id)
+    finally:
+        db.close()
+        http.close()
+
+
 class ReposService:
     def __init__(
         self,
@@ -270,7 +283,7 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
-    REPO_STATS_STALE_AFTER = timedelta(days=5)
+    REPO_STATS_STALE_AFTER = timedelta(minutes=5)
 
     def get_repos(self):
         stmt = (
@@ -308,7 +321,9 @@ class ReposService:
 
         return readme
 
-    def get_repo_stats(self, repo_id: int):
+    def get_repo_stats(
+        self, repo_id: int, background_tasks: BackgroundTasks | None = None
+    ):
         stats = self.db_session.scalar(
             select(RepoStats).where(RepoStats.repository_id == repo_id)
         )
@@ -317,8 +332,9 @@ class ReposService:
             return self.create_repo_stats(repo_id=repo_id)
 
         if is_stale(stats.updated_at, self.REPO_STATS_STALE_AFTER):
-            return self.refresh_repo_stats(repo_id=repo_id)
-
+            if background_tasks is not None:
+                background_tasks.add_task(refresh_repo_stats_task, repo_id)
+            return self.read_repo_stats(repo_id=repo_id)
         return self.read_repo_stats(repo_id=repo_id)
 
     def read_repo_stats(self, repo_id: int) -> dict[str, Any]:
