@@ -283,7 +283,7 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
-    REPO_STATS_STALE_AFTER = timedelta(minutes=5)
+    REPO_STATS_STALE_AFTER = timedelta(days=5)
 
     def get_repos(self):
         stmt = (
