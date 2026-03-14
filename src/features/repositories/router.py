@@ -15,7 +15,7 @@ from src.features.repositories.service import ReposService
 from src.features.repositories.tasks import download_repo
 
 
-router = APIRouter(prefix="/repositories")
+router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 
 @router.post("/add-repo")

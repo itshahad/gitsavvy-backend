@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import time
 from typing import Any
 
@@ -8,13 +8,14 @@ from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
 from sqlalchemy.orm import Session, defer
 from sqlalchemy import delete, select
+from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.exceptions import ExternalServiceError, StorageError
 from sqlalchemy.exc import IntegrityError
 
 from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
-from src.features.repositories.constants import REPOS_PATH
+from src.features.repositories.constants import REPO_STATS_STALE_AFTER, REPOS_PATH
 from src.features.repositories.exceptions import raise_request_exception
 from src.features.repositories.models import (
     File,
@@ -48,7 +49,6 @@ from src.features.repositories.utils import (
     is_binary,
     is_selected,
     is_skipped,
-    is_stale,
     weekly_to_monthly_commit_activity,
 )
 from src.models_loader import ContributorType
@@ -283,8 +283,6 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
-    REPO_STATS_STALE_AFTER = timedelta(days=5)
-
     def get_repos(self):
         stmt = (
             select(Repository)
@@ -331,7 +329,7 @@ class ReposService:
         if stats is None:
             return self.create_repo_stats(repo_id=repo_id)
 
-        if is_stale(stats.updated_at, self.REPO_STATS_STALE_AFTER):
+        if is_stale(stats.updated_at, REPO_STATS_STALE_AFTER):
             if background_tasks is not None:
                 background_tasks.add_task(refresh_repo_stats_task, repo_id)
             return self.read_repo_stats(repo_id=repo_id)

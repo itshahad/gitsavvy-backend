@@ -1,4 +1,4 @@
-#module specific constants and error codes
+from datetime import timedelta
 
-# DEFAULT_LIMIT = 10
-# FEATURE_NAME = "users"
+
+ISSUE_STALE_TIME = timedelta(minutes=1)

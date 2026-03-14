@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+
 REPOS_PATH = "repos"
 
 
@@ -144,3 +147,5 @@ BINARY_FILE_MAGICS = {
     b"wOF2",
     b"SQLite format 3\x00",
 }
+
+REPO_STATS_STALE_AFTER = timedelta(days=5)

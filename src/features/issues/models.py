@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from src.models import BaseModel
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey
+from sqlalchemy import BigInteger, ForeignKey
 
 if TYPE_CHECKING:
     from src.features.repositories.models import Repository
@@ -13,7 +13,7 @@ class Issue(BaseModel):
     __tablename__ = "issue"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    github_id: Mapped[int] = mapped_column(unique=True, index=True)
+    github_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     repository_id: Mapped[int] = mapped_column(
         ForeignKey("repository.id", ondelete="CASCADE")
     )
@@ -47,7 +47,7 @@ class IssueAssignee(BaseModel):
 
     issue_id: Mapped[int] = mapped_column(ForeignKey("issue.id", ondelete="CASCADE"))
 
-    github_user_id: Mapped[int]
+    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[str]
     avatar_url: Mapped[str | None]
 
@@ -55,3 +55,22 @@ class IssueAssignee(BaseModel):
 
     def __repr__(self):
         return f"issue_id(id={self.issue_id!r}, github_user_id={self.github_user_id!r}, avatar_url={self.avatar_url!r}, username={self.username!r})"
+
+
+class RepoIssueSyncState(BaseModel):
+    __tablename__ = "repo_issue_sync_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
+
+    repository: Mapped["Repository"] = relationship(back_populates="issue_sync_state")
+
+    # last_synced_at: Mapped[datetime | None]
+    # last_full_sync_at: Mapped[datetime | None]
+    next_cursor: Mapped[int | None] = mapped_column(default=1)
+    is_fully_synced: Mapped[bool] = mapped_column(default=False)
+    is_refreshing: Mapped[bool] = mapped_column(default=False)
+    last_error: Mapped[str | None]

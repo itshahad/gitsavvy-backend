@@ -1,6 +1,9 @@
-#router dependencies
+import requests
 
-# from database import get_db
 
-# def get_feature_db():
-#     return next(get_db())
+def get_http_session():
+    http = requests.session()
+    try:
+        yield http
+    finally:
+        http.close()

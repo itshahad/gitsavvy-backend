@@ -8,6 +8,7 @@ from sqlalchemy import ForeignKey, String, UniqueConstraint
 
 if TYPE_CHECKING:
     from src.features.indexer.models import Chunk
+    from src.features.issues.models import RepoIssueSyncState, Issue
 
 
 class Repository(BaseModel):
@@ -60,8 +61,14 @@ class Repository(BaseModel):
         back_populates="repository", cascade="all, delete-orphan"
     )
 
-    issues: Mapped[List["RepoMonthlyActivity"]] = relationship(
+    issues: Mapped[List["Issue"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    issue_sync_state: Mapped["RepoIssueSyncState | None"] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
     readme_content: Mapped[str] = mapped_column(nullable=True)

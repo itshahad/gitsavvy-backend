@@ -16,7 +16,7 @@ from src.features.documentation_generator.service import (
 from src.pagination import cursor_pagination_params
 
 
-router = APIRouter(prefix="/documentation")
+router = APIRouter(prefix="/documentation", tags=["documentation"])
 
 
 # @router.get("/generate")
