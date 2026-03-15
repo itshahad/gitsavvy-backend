@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, defer
 from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.features.issues.constants import ISSUE_STALE_TIME
+from src.features.issues.exceptions import IssueNotFoundError
 from src.features.issues.models import Issue, IssueAssignee, RepoIssueSyncState
 from src.features.issues.schemas import IssueFromApi
 from src.features.issues.utils import extract_next_page_from_link
@@ -267,3 +268,9 @@ class IssuesService:
             "next_cursor": issues[-1].number if issues else None,
         }
         return result
+
+    def get_issue(self, issue_id: int):
+        issue = self.db_session.get(Issue, issue_id)
+        if issue is None:
+            raise IssueNotFoundError(issue_id=issue_id)
+        return issue

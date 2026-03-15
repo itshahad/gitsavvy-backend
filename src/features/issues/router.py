@@ -7,7 +7,7 @@ from requests import Session as http_session
 from src.database import get_db
 from src.exceptions import DatabaseError
 from src.features.issues.dependencies import get_http_session
-from src.features.issues.service import IssuesService
+from src.features.issues.service import IssueNotFoundError, IssuesService
 from src.pagination import cursor_pagination_params
 
 
@@ -33,5 +33,22 @@ def get_repo_issues(
             background_tasks=background_tasks,
         )
         return result
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/{issue_id}")
+def get_issue(
+    repo_id: int,
+    issue_id: int,
+    db: Session = Depends(get_db),
+    http: http_session = Depends(get_http_session),
+):
+    issues_service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
+    try:
+        result = issues_service.get_issue(issue_id=issue_id)
+        return result
+    except IssueNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Issue Not Found") from e
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e
