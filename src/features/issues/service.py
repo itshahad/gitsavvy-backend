@@ -1,9 +1,11 @@
 from typing import Any
 
+from fastapi import BackgroundTasks
 import requests
 from sqlalchemy import select
 from sqlalchemy.orm import Session, defer
 from src.core.validators import is_stale
+from src.database import SessionLocal
 from src.features.issues.constants import ISSUE_STALE_TIME
 from src.features.issues.models import Issue, IssueAssignee, RepoIssueSyncState
 from src.features.issues.schemas import IssueFromApi
@@ -11,6 +13,17 @@ from src.features.issues.utils import extract_next_page_from_link
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPOS_PATH
 from src.features.repositories.models import Repository
+
+
+def refresh_issues_task(repo_id: int):
+    db = SessionLocal()
+    http = requests.session()
+    try:
+        service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
+        service.refresh_repo_issues()
+    finally:
+        db.close()
+        http.close()
 
 
 class IssuesService:
@@ -154,7 +167,7 @@ class IssuesService:
         except Exception as e:
             raise e
 
-    def _refresh_repo_issues(self, max_pages: int = 3) -> None:
+    def refresh_repo_issues(self, max_pages: int = 3) -> None:
         print("refreshing")
         repo_sync_state = self._get_or_create_repo_sync_state()
 
@@ -194,13 +207,19 @@ class IssuesService:
             repo_sync_state.is_refreshing = False
             self.db_session.commit()
 
-    def get_repo_issues(self, limit: int = 10, cursor: int | None = None):
+    def get_repo_issues(
+        self,
+        limit: int = 10,
+        cursor: int | None = None,
+        background_tasks: BackgroundTasks | None = None,
+    ):
         repo_sync_state = self._get_or_create_repo_sync_state()
 
         if is_stale(
             updated_at=repo_sync_state.updated_at, stale_after=ISSUE_STALE_TIME
         ):
-            self._refresh_repo_issues()
+            if background_tasks is not None:
+                background_tasks.add_task(refresh_issues_task, self.repo_id)
 
         issues: list[Issue] = self._get_repo_issues_from_db(limit=limit, cursor=cursor)
 

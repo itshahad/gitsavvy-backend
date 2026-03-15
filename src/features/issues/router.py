@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from requests import Session as http_session
 
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/issues", tags=["Issues"])
 @router.get("/{repo_id}")
 def get_repo_issues(
     repo_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     http: http_session = Depends(get_http_session),
     pagination: dict[str, int | None] = Depends(cursor_pagination_params),
@@ -27,7 +28,9 @@ def get_repo_issues(
         cursor = pagination["cursor"]
 
         result = issues_service.get_repo_issues(
-            limit=limit if limit else 10, cursor=cursor
+            limit=limit if limit else 10,
+            cursor=cursor,
+            background_tasks=background_tasks,
         )
         return result
     except DatabaseError as e:
