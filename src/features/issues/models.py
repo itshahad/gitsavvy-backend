@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from src.models import BaseModel
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import BigInteger, ForeignKey
+from sqlalchemy import BigInteger, ForeignKey, UniqueConstraint
 
 if TYPE_CHECKING:
     from src.features.repositories.models import Repository
@@ -11,6 +11,10 @@ if TYPE_CHECKING:
 
 class Issue(BaseModel):
     __tablename__ = "issue"
+
+    __table_args__ = (
+        UniqueConstraint("repository_id", "number", name="uq_repo_issue_number"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     github_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
@@ -32,6 +36,10 @@ class Issue(BaseModel):
 
     repository: Mapped["Repository"] = relationship(back_populates="issues")
     assignees: Mapped[list["IssueAssignee"]] = relationship(
+        back_populates="issue",
+        cascade="all, delete-orphan",
+    )
+    issue_comments: Mapped[list["IssueComment"]] = relationship(
         back_populates="issue",
         cascade="all, delete-orphan",
     )
@@ -75,3 +83,22 @@ class RepoIssueSyncState(BaseModel):
     is_fully_synced: Mapped[bool] = mapped_column(default=False)
     is_refreshing: Mapped[bool] = mapped_column(default=False)
     last_error: Mapped[str | None]
+
+
+class IssueComment(BaseModel):
+    __tablename__ = "issue_comment"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issue.id", ondelete="CASCADE"))
+
+    issue: Mapped["Issue"] = relationship(back_populates="issue_comments")
+
+    github_comment_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    username: Mapped[str]
+    avatar_url: Mapped[str | None]
+
+    posted_at: Mapped[datetime]
+
+    body: Mapped[str]

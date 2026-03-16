@@ -7,16 +7,21 @@ from sqlalchemy.orm import Session, defer
 from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.exceptions import raise_request_exception
-from src.features.issues.constants import ISSUE_STALE_TIME
+from src.features.issues.constants import ISSUE_COMMENTS_STALE_TIME, ISSUE_STALE_TIME
 from sqlalchemy.exc import NoResultFound
 
 from src.features.issues.exceptions import IssueNotFoundError
 from src.features.issues.models import Issue, IssueAssignee, RepoIssueSyncState
-from src.features.issues.schemas import IssueFromApi
+from src.features.issues.schemas import (
+    IssueCommentFromApi,
+    IssueCommentRead,
+    IssueFromApi,
+)
 from src.features.issues.utils import extract_next_page_from_link
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPOS_PATH
 from src.features.repositories.models import Repository
+from src.models_loader import IssueComment
 
 
 def refresh_issues_task(repo_id: int):
@@ -25,6 +30,17 @@ def refresh_issues_task(repo_id: int):
     try:
         service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
         service.refresh_repo_issues()
+    finally:
+        db.close()
+        http.close()
+
+
+def refresh_issue_comments_task(repo_id: int, issue_number: int):
+    db = SessionLocal()
+    http = requests.session()
+    try:
+        service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
+        service.refresh_issue_comment(issue_number=issue_number)
     finally:
         db.close()
         http.close()
@@ -273,7 +289,9 @@ class IssuesService:
         return result
 
     def get_issue(self, issue_number: int):
-        stmt = select(Issue).where(Issue.number == issue_number)
+        stmt = select(Issue).where(
+            Issue.repository_id == self.repo_id, Issue.number == issue_number
+        )
 
         try:
             issue = self.db_session.execute(stmt).scalar_one()
@@ -282,17 +300,120 @@ class IssuesService:
 
         return issue
 
-    def get_issue_comments(self, issue_number: int):
+    def _get_issue_comments_from_api(self, issue_number: int):
+        print("calling api")
         try:
             repo = self._get_repo()
+
             r = self.http_session.get(
                 f"{API_URL}{REPOS_PATH}/{repo.owner}/{repo.name}/issues/{issue_number}/comments",
                 headers=headers(),
             )
             r.raise_for_status()
 
-            return r.json()
+            data = r.json()
+
+            comments: list[IssueCommentFromApi] = [
+                IssueCommentFromApi.model_validate(com) for com in data
+            ]
+
+            return comments
         except Exception as e:
             raise_request_exception(
                 e=e, not_found_exception=IssueNotFoundError(issue_number=issue_number)
             )
+
+    def _store_or_update_comments(
+        self, issue_number: int, api_comments: list[IssueCommentFromApi]
+    ):
+        issue = self.get_issue(issue_number=issue_number)
+
+        comments_from_db = self._get_issue_comments_from_db(issue_number=issue_number)
+
+        existing_comment_by_number = {
+            comment.github_comment_id: comment for comment in comments_from_db
+        }
+
+        api_comment_by_number = {
+            comment.github_comment_id: comment for comment in api_comments
+        }
+
+        stored_comments: list[IssueComment] = []
+
+        for db_comment in comments_from_db:
+            if db_comment.github_comment_id not in api_comment_by_number:
+                self.db_session.delete(db_comment)
+
+        for com in api_comments:
+            comment = existing_comment_by_number.get(com.github_comment_id)
+
+            if comment is None:
+                comment = IssueComment(issue_id=issue.id, **com.model_dump())
+                self.db_session.add(comment)
+            else:
+                for field, value in com.model_dump().items():
+                    setattr(comment, field, value)
+
+            stored_comments.append(comment)
+
+        self.db_session.commit()
+        return stored_comments
+
+    def _get_issue_comments_from_db(self, issue_number: int):
+        issue = self.get_issue(issue_number=issue_number)
+
+        query = (
+            select(IssueComment)
+            .where(IssueComment.issue_id == issue.id)
+            .order_by(IssueComment.posted_at)
+        )
+
+        return list(self.db_session.scalars(query))
+
+    def refresh_issue_comment(self, issue_number: int):
+        print("refreshing")
+
+        comments_from_api = self._get_issue_comments_from_api(issue_number=issue_number)
+
+        self._store_or_update_comments(
+            issue_number=issue_number, api_comments=comments_from_api
+        )
+
+    def get_issue_comments(
+        self, issue_number: int, background_tasks: BackgroundTasks | None
+    ):
+        comments_from_db = self._get_issue_comments_from_db(issue_number=issue_number)
+        print(len(comments_from_db))
+
+        if len(comments_from_db) != 0:
+            print("here")
+            last_fetch_time = comments_from_db[0].updated_at
+
+            if is_stale(
+                updated_at=last_fetch_time, stale_after=ISSUE_COMMENTS_STALE_TIME
+            ):
+                if background_tasks is not None:
+                    background_tasks.add_task(
+                        refresh_issue_comments_task, self.repo_id, issue_number
+                    )
+            result = {
+                "comments": [
+                    IssueCommentRead.model_validate(com) for com in comments_from_db
+                ]
+            }
+            return result
+        else:
+            comments_from_api = self._get_issue_comments_from_api(
+                issue_number=issue_number
+            )
+
+            stored_comments = self._store_or_update_comments(
+                issue_number=issue_number, api_comments=comments_from_api
+            )
+
+            result = {
+                "comments": [
+                    IssueCommentRead.model_validate(com) for com in stored_comments
+                ]
+            }
+            return result

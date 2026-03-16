@@ -65,3 +65,34 @@ class IssueAssigneeRead(IssueAssigneeModel):
     id: int
     github_user_id: int
     username: str
+
+
+# =======================================================================
+
+
+class IssueCommentModel(BaseModel):
+    github_user_id: int = Field(validation_alias=AliasPath("user", "id"))
+    username: str = Field(validation_alias=AliasPath("user", "login"))
+    avatar_url: str | None = Field(validation_alias=AliasPath("user", "avatar_url"))
+    github_comment_id: int = Field(validation_alias=AliasPath("id"))
+    posted_at: datetime = Field(validation_alias=AliasPath("created_at"))
+    body: str
+
+
+class IssueCommentFromApi(IssueCommentModel):
+    pass
+
+
+class IssueCommentCreate(IssueCommentModel):
+    issue_id: int
+    pass
+
+
+class IssueCommentRead(IssueCommentModel):
+    issue_id: int
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    github_user_id: int
+    username: str
+    avatar_url: str | None
+    posted_at: datetime

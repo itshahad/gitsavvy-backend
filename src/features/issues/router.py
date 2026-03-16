@@ -58,12 +58,15 @@ def get_issue(
 def get_issue_comments(
     repo_id: int,
     issue_number: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     http: http_session = Depends(get_http_session),
 ):
     issues_service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
     try:
-        result = issues_service.get_issue_comments(issue_number=issue_number)
+        result = issues_service.get_issue_comments(
+            issue_number=issue_number, background_tasks=background_tasks
+        )
         return result
     except IssueNotFoundError as e:
         raise HTTPException(status_code=404, detail="Issue Not Found") from e
