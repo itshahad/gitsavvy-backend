@@ -37,16 +37,33 @@ def get_repo_issues(
         raise HTTPException(status_code=500, detail="Database Error") from e
 
 
-@router.get("/{repo_id}/{issue_id}")
+@router.get("/{repo_id}/{issue_number}")
 def get_issue(
     repo_id: int,
-    issue_id: int,
+    issue_number: int,
     db: Session = Depends(get_db),
     http: http_session = Depends(get_http_session),
 ):
     issues_service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
     try:
-        result = issues_service.get_issue(issue_id=issue_id)
+        result = issues_service.get_issue(issue_number=issue_number)
+        return result
+    except IssueNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Issue Not Found") from e
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+@router.get("/{repo_id}/{issue_number}/comments")
+def get_issue_comments(
+    repo_id: int,
+    issue_number: int,
+    db: Session = Depends(get_db),
+    http: http_session = Depends(get_http_session),
+):
+    issues_service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
+    try:
+        result = issues_service.get_issue_comments(issue_number=issue_number)
         return result
     except IssueNotFoundError as e:
         raise HTTPException(status_code=404, detail="Issue Not Found") from e

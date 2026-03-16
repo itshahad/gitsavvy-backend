@@ -70,6 +70,7 @@ class RepoIssueSyncState(BaseModel):
 
     # last_synced_at: Mapped[datetime | None]
     # last_full_sync_at: Mapped[datetime | None]
+    num_of_comments: Mapped[int] = mapped_column(default=0, server_default="0")
     next_cursor: Mapped[int | None] = mapped_column(default=1)
     is_fully_synced: Mapped[bool] = mapped_column(default=False)
     is_refreshing: Mapped[bool] = mapped_column(default=False)

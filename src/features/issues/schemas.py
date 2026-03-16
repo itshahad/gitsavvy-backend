@@ -13,6 +13,7 @@ class IssueModel(BaseModel):
     closed_at: datetime | None
     author_github_id: int | None = Field(validation_alias=AliasPath("user", "id"))
     author_username: str | None = Field(validation_alias=AliasPath("user", "login"))
+    num_of_comments: int = Field(validation_alias=AliasPath("comments"))
     author_avatar_url: str | None = Field(
         validation_alias=AliasPath("user", "avatar_url")
     )
@@ -37,6 +38,7 @@ class IssueRead(IssueModel):
     author_github_id: int | None
     author_username: str | None
     author_avatar_url: str | None
+    num_of_comments: int
 
 
 # =======================================================================

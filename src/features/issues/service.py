@@ -6,7 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, defer
 from src.core.validators import is_stale
 from src.database import SessionLocal
+from src.exceptions import raise_request_exception
 from src.features.issues.constants import ISSUE_STALE_TIME
+from sqlalchemy.exc import NoResultFound
+
 from src.features.issues.exceptions import IssueNotFoundError
 from src.features.issues.models import Issue, IssueAssignee, RepoIssueSyncState
 from src.features.issues.schemas import IssueFromApi
@@ -269,8 +272,27 @@ class IssuesService:
         }
         return result
 
-    def get_issue(self, issue_id: int):
-        issue = self.db_session.get(Issue, issue_id)
-        if issue is None:
-            raise IssueNotFoundError(issue_id=issue_id)
+    def get_issue(self, issue_number: int):
+        stmt = select(Issue).where(Issue.number == issue_number)
+
+        try:
+            issue = self.db_session.execute(stmt).scalar_one()
+        except NoResultFound:
+            raise IssueNotFoundError(issue_number)
+
         return issue
+
+    def get_issue_comments(self, issue_number: int):
+        try:
+            repo = self._get_repo()
+            r = self.http_session.get(
+                f"{API_URL}{REPOS_PATH}/{repo.owner}/{repo.name}/issues/{issue_number}/comments",
+                headers=headers(),
+            )
+            r.raise_for_status()
+
+            return r.json()
+        except Exception as e:
+            raise_request_exception(
+                e=e, not_found_exception=IssueNotFoundError(issue_number=issue_number)
+            )
