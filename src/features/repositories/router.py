@@ -1,5 +1,5 @@
 from celery import chain  # type: ignore
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from requests import Session as http_session
 
@@ -15,7 +15,7 @@ from src.features.repositories.service import ReposService
 from src.features.repositories.tasks import download_repo
 
 
-router = APIRouter(prefix="/repositories")
+router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 
 @router.post("/add-repo")
@@ -98,13 +98,15 @@ def get_repository_readme(
 @router.get("/{repo_id}/stats")
 def get_repository_stats(
     repo_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     http: http_session = Depends(get_http_session),
 ):
     repos_service = ReposService(db_session=db, http_session=http)
     try:
-        stats = repos_service.get_repo_stats(repo_id=repo_id)
-        # result: dict[str, str | int | None] = {"repo_id": repo_id, "stats": stats}
+        stats = repos_service.get_repo_stats(
+            repo_id=repo_id, background_tasks=background_tasks
+        )
         return stats
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e

@@ -19,6 +19,7 @@ from src.features.documentation_generator.router import router as docs_router
 from src.features.authentication.router import router as auth_router
 from src.features.chatbot.router import router as chatbot_router
 from src.features.repositories.router import router as repositories_router
+from src.features.issues.router import router as issues_router
 
 
 app = FastAPI()
@@ -42,6 +43,7 @@ app.include_router(router=indexer_router)
 app.include_router(router=repositories_router)
 app.include_router(router=docs_router)
 app.include_router(router=chatbot_router)
+app.include_router(router=issues_router)
 # with engine.begin() as conn:
 #     conn.execute(text("DROP TABLE IF EXISTS documentation CASCADE"))
 # Base.metadata.drop_all(engine)

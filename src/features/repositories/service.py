@@ -1,19 +1,22 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import time
 from typing import Any
 
+from fastapi import BackgroundTasks
 import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
 from sqlalchemy.orm import Session, defer
 from sqlalchemy import delete, select
-from src.exceptions import ExternalServiceError, StorageError
+from src.core.validators import is_stale
+from src.database import SessionLocal
+from src.exceptions import ExternalServiceError, StorageError, raise_request_exception
 from sqlalchemy.exc import IntegrityError
 
 from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
-from src.features.repositories.constants import REPOS_PATH
-from src.features.repositories.exceptions import raise_request_exception
+from src.features.repositories.constants import REPO_STATS_STALE_AFTER, REPOS_PATH
+from src.features.repositories.exceptions import RepoNotFoundError
 from src.features.repositories.models import (
     File,
     Module,
@@ -46,7 +49,6 @@ from src.features.repositories.utils import (
     is_binary,
     is_selected,
     is_skipped,
-    is_stale,
     weekly_to_monthly_commit_activity,
 )
 from src.models_loader import ContributorType
@@ -104,7 +106,10 @@ class RepoProcessingService:
             return repo_from_db
 
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def download_repo(self, owner: str, repo_name: str) -> tuple[str, str]:
         try:
@@ -128,7 +133,10 @@ class RepoProcessingService:
             msg = str(e) or "Storage write failed"
             raise StorageError(message=msg) from e
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     # file selection: -----------------------------------------------------------------------------
 
@@ -259,6 +267,17 @@ class RepoProcessingService:
         return self.cashed_modules[key]
 
 
+def refresh_repo_stats_task(repo_id: int):
+    db = SessionLocal()
+    http = requests.session()
+    try:
+        service = ReposService(db_session=db, http_session=http)
+        service.refresh_repo_stats(repo_id=repo_id)
+    finally:
+        db.close()
+        http.close()
+
+
 class ReposService:
     def __init__(
         self,
@@ -269,8 +288,6 @@ class ReposService:
         self.http_session = http_session
 
     cached_repos: dict[int, RepoRead] = {}
-
-    REPO_STATS_STALE_AFTER = timedelta(days=5)
 
     def get_repos(self):
         stmt = (
@@ -299,7 +316,7 @@ class ReposService:
             )
         if repo is None:
             raise ValueError(f"Repository with id {repo_id} was not found")
-        return repo
+        return RepoRead.model_validate(repo)
 
     def get_repo_readme(self, repo_id: int) -> str | None:
         stmt = select(Repository.readme_content).where(Repository.id == repo_id)
@@ -308,7 +325,9 @@ class ReposService:
 
         return readme
 
-    def get_repo_stats(self, repo_id: int):
+    def get_repo_stats(
+        self, repo_id: int, background_tasks: BackgroundTasks | None = None
+    ):
         stats = self.db_session.scalar(
             select(RepoStats).where(RepoStats.repository_id == repo_id)
         )
@@ -316,9 +335,10 @@ class ReposService:
         if stats is None:
             return self.create_repo_stats(repo_id=repo_id)
 
-        if is_stale(stats.updated_at, self.REPO_STATS_STALE_AFTER):
-            return self.refresh_repo_stats(repo_id=repo_id)
-
+        if is_stale(stats.updated_at, REPO_STATS_STALE_AFTER):
+            if background_tasks is not None:
+                background_tasks.add_task(refresh_repo_stats_task, repo_id)
+            return self.read_repo_stats(repo_id=repo_id)
         return self.read_repo_stats(repo_id=repo_id)
 
     def read_repo_stats(self, repo_id: int) -> dict[str, Any]:
@@ -524,7 +544,10 @@ class ReposService:
             count = extract_last_page_count(link_header=link)
             return count
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def compute_num_of_merged_pr(self, owner: str, repo_name: str):
         if self.http_session is None:
@@ -540,7 +563,10 @@ class ReposService:
             data = r.json()
             return int(data["total_count"])
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def compute_num_of_closed_issues(self, owner: str, repo_name: str):
         if self.http_session is None:
@@ -556,7 +582,10 @@ class ReposService:
             data = r.json()
             return int(data["total_count"])
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def compute_num_of_contributors(self, owner: str, repo_name: str):
         if self.http_session is None:
@@ -577,7 +606,10 @@ class ReposService:
             count = extract_last_page_count(link_header=link)
             return count
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def compute_monthly_commit_activity(
         self, owner: str, repo_name: str
@@ -610,7 +642,10 @@ class ReposService:
             return None
 
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
 
     def get_top_contributors(self, owner: str, repo_name: str, limit: int = 5):
         if self.http_session is None:
@@ -646,4 +681,7 @@ class ReposService:
 
             return contributors
         except Exception as e:
-            raise_request_exception(e=e, owner=owner, repo_name=repo_name)
+            raise_request_exception(
+                e=e,
+                not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
+            )
