@@ -316,7 +316,7 @@ class ReposService:
             )
         if repo is None:
             raise ValueError(f"Repository with id {repo_id} was not found")
-        return repo
+        return RepoRead.model_validate(repo)
 
     def get_repo_readme(self, repo_id: int) -> str | None:
         stmt = select(Repository.readme_content).where(Repository.id == repo_id)
