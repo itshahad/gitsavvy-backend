@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session, defer
 from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.exceptions import raise_request_exception
-from src.features.issues.constants import ISSUE_COMMENTS_STALE_TIME, ISSUE_STALE_TIME
+from src.features.issues.constants import (
+    ISSUE_COMMENTS_STALE_TIME,
+    ISSUE_STALE_TIME,
+)
 from sqlalchemy.exc import NoResultFound
 
 from src.features.issues.exceptions import IssueNotFoundError
@@ -359,6 +362,25 @@ class IssuesService:
         self.db_session.commit()
         return stored_comments
 
+    def _upsert_single_comment(self, issue_number: int, com: IssueCommentFromApi):
+        issue = self.get_issue(issue_number=issue_number)
+
+        comment = self.db_session.scalar(
+            select(IssueComment).where(
+                IssueComment.github_comment_id == com.github_comment_id
+            )
+        )
+
+        if comment is None:
+            comment = IssueComment(issue_id=issue.id, **com.model_dump())
+            self.db_session.add(comment)
+        else:
+            for field, value in com.model_dump().items():
+                setattr(comment, field, value)
+
+        self.db_session.commit()
+        return comment
+
     def _get_issue_comments_from_db(self, issue_number: int):
         issue = self.get_issue(issue_number=issue_number)
 
@@ -417,3 +439,30 @@ class IssuesService:
                 ]
             }
             return result
+
+    # THE TOKEN OF THIS ENDPOINT SHOULD BE THE USER TOKEN, BUT FOR NOW IM USING MY OWN
+    # def post_comment(self, comment_body: str, issue_number: int):
+    #     try:
+    #         repo = self._get_repo()
+
+    #         print(headers(custom_token=CUSTOM_TOKEN))
+    #         r = self.http_session.post(
+    #             f"{API_URL}{REPOS_PATH}/{repo.owner}/{repo.name}/issues/{issue_number}/comments",
+    #             headers=headers(custom_token=CUSTOM_TOKEN),
+    #             json={"body": comment_body},
+    #         )
+    #         print(r.headers)
+    #         print(r.status_code)
+    #         print(r.text)
+    #         r.raise_for_status()
+
+    #         comment_data = IssueCommentFromApi.model_validate(r.json())
+    #         print(comment_data)
+    #         comment = self._upsert_single_comment(
+    #             issue_number=issue_number,
+    #             com=comment_data,
+    #         )
+
+    #         return IssueCommentRead.model_validate(comment)
+    #     except:
+    #         pass

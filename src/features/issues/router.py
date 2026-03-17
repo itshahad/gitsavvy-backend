@@ -7,6 +7,8 @@ from requests import Session as http_session
 from src.database import get_db
 from src.exceptions import DatabaseError
 from src.features.issues.dependencies import get_http_session
+
+# from src.features.issues.schemas import CommentCreate
 from src.features.issues.service import IssueNotFoundError, IssuesService
 from src.pagination import cursor_pagination_params
 
@@ -72,3 +74,24 @@ def get_issue_comments(
         raise HTTPException(status_code=404, detail="Issue Not Found") from e
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail="Database Error") from e
+
+
+# @router.post("/{repo_id}/{issue_number}/comments")
+# def post_comment(
+#     repo_id: int,
+#     issue_number: int,
+#     data: CommentCreate,
+#     db: Session = Depends(get_db),
+#     http: http_session = Depends(get_http_session),
+# ):
+#     print(data.body)
+#     issues_service = IssuesService(db_session=db, http_session=http, repo_id=repo_id)
+#     try:
+#         result = issues_service.post_comment(
+#             issue_number=issue_number, comment_body=data.body
+#         )
+#         return result
+#     except IssueNotFoundError as e:
+#         raise HTTPException(status_code=404, detail="Issue Not Found") from e
+#     except DatabaseError as e:
+#         raise HTTPException(status_code=500, detail="Database Error") from e

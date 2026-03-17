@@ -96,3 +96,7 @@ class IssueCommentRead(IssueCommentModel):
     username: str
     avatar_url: str | None
     posted_at: datetime
+
+
+class CommentCreate(BaseModel):
+    body: str

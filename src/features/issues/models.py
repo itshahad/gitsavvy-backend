@@ -33,6 +33,7 @@ class Issue(BaseModel):
     author_github_id: Mapped[int | None]
     author_username: Mapped[str | None]
     author_avatar_url: Mapped[str | None]
+    num_of_comments: Mapped[int] = mapped_column(default=0, server_default="0")
 
     repository: Mapped["Repository"] = relationship(back_populates="issues")
     assignees: Mapped[list["IssueAssignee"]] = relationship(
@@ -78,7 +79,6 @@ class RepoIssueSyncState(BaseModel):
 
     # last_synced_at: Mapped[datetime | None]
     # last_full_sync_at: Mapped[datetime | None]
-    num_of_comments: Mapped[int] = mapped_column(default=0, server_default="0")
     next_cursor: Mapped[int | None] = mapped_column(default=1)
     is_fully_synced: Mapped[bool] = mapped_column(default=False)
     is_refreshing: Mapped[bool] = mapped_column(default=False)
