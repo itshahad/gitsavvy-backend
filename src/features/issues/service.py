@@ -184,9 +184,6 @@ class IssuesService:
                     "page": cursor,
                 },
             )
-            print(r.headers)
-            print(r.status_code)
-            print(r.json())
             r.raise_for_status()
 
             link_header = r.headers.get("Link")
