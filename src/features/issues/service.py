@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import BackgroundTasks
 import requests
 from sqlalchemy import select
-from sqlalchemy.orm import Session, defer
+from sqlalchemy.orm import Session, defer, selectinload
 from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.exceptions import raise_request_exception
@@ -19,12 +19,13 @@ from src.features.issues.schemas import (
     IssueCommentFromApi,
     IssueCommentRead,
     IssueFromApi,
+    IssueRead,
 )
 from src.features.issues.utils import extract_next_page_from_link
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPOS_PATH
 from src.features.repositories.models import Repository
-from src.models_loader import IssueComment
+from src.models_loader import IssueComment, IssueLabel
 
 
 def refresh_issues_task(repo_id: int):
@@ -96,6 +97,10 @@ class IssuesService:
         query = (
             select(Issue)
             .where(Issue.repository_id == self.repo_id)
+            .options(
+                selectinload(Issue.assignees),
+                selectinload(Issue.issue_labels),
+            )
             .order_by(Issue.number.desc())
             .limit(limit)
         )
@@ -133,21 +138,30 @@ class IssuesService:
             if issue is None:
                 issue = Issue(
                     repository_id=repo_id,
-                    **issue_data.model_dump(exclude={"assignees"}),
+                    **issue_data.model_dump(exclude={"assignees", "labels"}),
                 )
                 self.db_session.add(issue)
             else:
                 for field, value in issue_data.model_dump(
-                    exclude={"assignees"}
+                    exclude={"assignees", "labels"}
                 ).items():
                     setattr(issue, field, value)
 
                 issue.assignees.clear()
+                issue.issue_labels.clear()
 
             for assignee_data in issue_data.assignees:
                 issue.assignees.append(
                     IssueAssignee(
+                        issue_id=issue.id,
                         **assignee_data.model_dump(),
+                    )
+                )
+            for label in issue_data.labels:
+                issue.issue_labels.append(
+                    IssueLabel(
+                        issue_id=issue.id,
+                        **label.model_dump(),
                     )
                 )
 
@@ -170,6 +184,9 @@ class IssuesService:
                     "page": cursor,
                 },
             )
+            print(r.headers)
+            print(r.status_code)
+            print(r.json())
             r.raise_for_status()
 
             link_header = r.headers.get("Link")
@@ -292,8 +309,13 @@ class IssuesService:
         return result
 
     def get_issue(self, issue_number: int):
-        stmt = select(Issue).where(
-            Issue.repository_id == self.repo_id, Issue.number == issue_number
+        stmt = (
+            select(Issue)
+            .where(Issue.repository_id == self.repo_id, Issue.number == issue_number)
+            .options(
+                selectinload(Issue.assignees),
+                selectinload(Issue.issue_labels),
+            )
         )
 
         try:
@@ -301,7 +323,7 @@ class IssuesService:
         except NoResultFound:
             raise IssueNotFoundError(issue_number)
 
-        return issue
+        return IssueRead.model_validate(issue)
 
     def _get_issue_comments_from_api(self, issue_number: int):
         print("calling api")
