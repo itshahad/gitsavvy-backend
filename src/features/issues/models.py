@@ -99,7 +99,7 @@ class IssueComment(BaseModel):
     issue: Mapped["Issue"] = relationship(back_populates="issue_comments")
 
     github_comment_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
-    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    github_user_id: Mapped[int] = mapped_column(BigInteger)
     username: Mapped[str]
     avatar_url: Mapped[str | None]
 
