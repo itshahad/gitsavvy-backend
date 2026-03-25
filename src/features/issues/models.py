@@ -44,6 +44,10 @@ class Issue(BaseModel):
         back_populates="issue",
         cascade="all, delete-orphan",
     )
+    issue_labels: Mapped[list["IssueLabel"]] = relationship(
+        back_populates="issue",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"Issue(id={self.id!r}, repository_id={self.repository_id!r})"
@@ -100,10 +104,24 @@ class IssueComment(BaseModel):
     issue: Mapped["Issue"] = relationship(back_populates="issue_comments")
 
     github_comment_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
-    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    github_user_id: Mapped[int] = mapped_column(BigInteger)
     username: Mapped[str]
     avatar_url: Mapped[str | None]
 
     posted_at: Mapped[datetime]
 
     body: Mapped[str]
+
+
+class IssueLabel(BaseModel):
+    __tablename__ = "issue_label"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issue.id", ondelete="CASCADE"))
+
+    issue: Mapped["Issue"] = relationship(back_populates="issue_labels")
+
+    name: Mapped[str]
+    description: Mapped[str]
+    color: Mapped[str]
