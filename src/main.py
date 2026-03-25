@@ -20,7 +20,9 @@ from src.features.authentication.router import router as auth_router
 from src.features.chatbot.router import router as chatbot_router
 from src.features.repositories.router import router as repositories_router
 from src.features.issues.router import router as issues_router
-
+from src.features.profileInfo.router import router as profile_router
+from src.features.userWork.router import router as user_work_router
+from src.features.contributions.router import router as contributions_router
 
 app = FastAPI()
 
@@ -39,7 +41,11 @@ async def shutdown():
 
 # app.include_router(chatbot_router)
 app.include_router(router=auth_router)
+
 app.include_router(router=indexer_router)
+app.include_router(profile_router)
+app.include_router(user_work_router)
+app.include_router(router=contributions_router)
 app.include_router(router=repositories_router)
 app.include_router(router=docs_router)
 app.include_router(router=chatbot_router)

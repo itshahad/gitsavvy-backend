@@ -1,6 +1,6 @@
 
-from sqlalchemy import String, Integer
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer,ForeignKey, JSON
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.database import engine, Base
 
 class User(Base):
@@ -19,3 +19,28 @@ class User(Base):
     github_access_token_enc: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
+
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    preference: Mapped["UserPreference | None"] = relationship(
+        "UserPreference",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+
+    languages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    interests: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
+    user: Mapped["User"] = relationship("User", back_populates="preference")

@@ -52,11 +52,16 @@ class Issue(BaseModel):
 class IssueAssignee(BaseModel):
     __tablename__ = "issue_assignee"
 
+    __table_args__ = (
+        UniqueConstraint("issue_id", "github_user_id", name="uq_issue_assignee_issue_user"),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
 
     issue_id: Mapped[int] = mapped_column(ForeignKey("issue.id", ondelete="CASCADE"))
 
-    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    # github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    github_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     username: Mapped[str]
     avatar_url: Mapped[str | None]
 
