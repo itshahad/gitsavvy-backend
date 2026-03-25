@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from src.database import get_db
-from src.features.authentication.schemas import GitHubSyncRequest, UserRead
+from src.features.authentication.schemas import (
+    GitHubSyncRequest,
+    UserRead,
+    # AccountProfileResponse,
+    # UpdatePreferencesRequest,
+    # UpdatePreferencesResponse,
+)
 from src.features.authentication.services import sync_user_first_login
 from src.features.authentication.dependencies import (
     get_current_claims,
@@ -35,6 +41,7 @@ def github_sync(
 @router.get("/me", response_model=UserRead)
 def me(user=Depends(get_current_user)):
     return user
+
 
 
 @router.get("/admin/test")
