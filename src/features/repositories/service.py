@@ -13,6 +13,7 @@ from src.database import SessionLocal
 from src.exceptions import ExternalServiceError, StorageError, raise_request_exception
 from sqlalchemy.exc import IntegrityError
 
+from src.features.authentication.models import UserPreference
 from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPO_STATS_STALE_AFTER, REPOS_PATH
@@ -23,6 +24,7 @@ from src.features.repositories.models import (
     RepoMonthlyActivity,
     RepoStats,
     Repository,
+    RepositoryLanguage,
     RepositoryTopic,
     TopRepoContributors,
 )
@@ -68,6 +70,7 @@ class RepoProcessingService:
             r = self.http_session.get(
                 f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers()
             )
+            print(headers())
             r.raise_for_status()
             repo_metadata = RepoCreate.model_validate(r.json())
             repo_data = Repository(
@@ -80,12 +83,26 @@ class RepoProcessingService:
                 ),
             )
 
+            languages = self.http_session.get(
+                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/languages",
+                headers=headers(),
+            )
+            languages.raise_for_status()
+            languages_data = languages.json()
+            print(languages_data)
+
             self.db_session.add(repo_data)
             self.db_session.flush()  # to get an id
             self.db_session.add_all(
                 [
                     RepositoryTopic(repository_id=repo_data.id, topic=t)
                     for t in repo_metadata.topics
+                ]
+            )
+            self.db_session.add_all(
+                [
+                    RepositoryLanguage(repository_id=repo_data.id, language=l)
+                    for l in languages_data.keys()
                 ]
             )
             self.db_session.refresh(repo_data)
@@ -685,3 +702,12 @@ class ReposService:
                 e=e,
                 not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
             )
+
+    def get_recommended_repos(self, user_id: int, k: int):
+        stmt = select(UserPreference).where(UserPreference.user_id == user_id)
+        user_preferences = self.db_session.execute(stmt).scalar_one_or_none()
+
+        if user_preferences is None:
+            raise ValueError("User has no preferences")
+
+        # repo_stmt = select(Repository).where(UserPreference.user_id == user_id)

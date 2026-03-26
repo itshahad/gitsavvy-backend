@@ -3,6 +3,7 @@ from pathlib import PurePosixPath
 from src.features.indexer.constants import *
 from tree_sitter import Node
 from src.features.repositories.constants import REPOS_PATH
+from src.features.repositories.models import Repository
 from src.models_loader import Outline
 
 
@@ -142,3 +143,17 @@ def outline_to_dict(outline: Outline):
     }
 
     return data
+
+
+def build_repo_profile(repo: Repository) -> str:
+    topics_text = " ".join(topic.topic for topic in repo.topics)
+    lang_text = " ".join(language.language for language in repo.languages)
+    readme_part = (repo.readme_content or "")[:3000]
+
+    return (
+        f"Name: {repo.name}. "
+        f"Description: {repo.description or ''}. "
+        f"Topics: {topics_text}. "
+        f"Language: {lang_text or ''}. "
+        f"README: {readme_part}"
+    )

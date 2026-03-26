@@ -9,6 +9,7 @@ from sqlalchemy import ForeignKey, String, UniqueConstraint
 if TYPE_CHECKING:
     from src.features.indexer.models import Chunk
     from src.features.issues.models import RepoIssueSyncState, Issue
+    from src.features.indexer.models import RepoProfileEmbedding
 
 
 class Repository(BaseModel):
@@ -38,6 +39,10 @@ class Repository(BaseModel):
     )
 
     topics: Mapped[List["RepositoryTopic"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+
+    languages: Mapped[List["RepositoryLanguage"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )
 
@@ -71,6 +76,12 @@ class Repository(BaseModel):
         uselist=False,
     )
 
+    repo_profile_embedding: Mapped["RepoProfileEmbedding"] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
     readme_content: Mapped[str] = mapped_column(nullable=True)
 
     def __repr__(self):
@@ -95,6 +106,25 @@ class RepositoryTopic(BaseModel):
 
     def __repr__(self):
         return f"RepositoryTopic(id={self.id!r}, repository_id={self.repository_id!r}, topic={self.topic!r})"
+
+
+# --------------------------------------------------------------
+
+
+class RepositoryLanguage(BaseModel):
+    __tablename__ = "repository_language"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE")
+    )
+    repository: Mapped["Repository"] = relationship(back_populates="languages")
+
+    language: Mapped[str]
+
+    def __repr__(self):
+        return f"RepositoryLanguage(id={self.id!r}, repository_id={self.repository_id!r}, topic={self.language!r})"
 
 
 # --------------------------------------------------------------

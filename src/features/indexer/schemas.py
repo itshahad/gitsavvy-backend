@@ -51,3 +51,20 @@ class ChunkEmbeddingCreate(ChunkEmbeddingModel):
 class ChunkEmbeddingRead(ChunkEmbeddingModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+# ====================================================================
+
+
+class RepoProfileEmbeddingModel(BaseModel):
+    repo_id: int
+    embedding_vector: list[float]
+
+
+class RepoProfileEmbeddingCreate(RepoProfileEmbeddingModel):
+    pass
+
+
+class RepoProfileEmbeddingRead(RepoProfileEmbeddingModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int

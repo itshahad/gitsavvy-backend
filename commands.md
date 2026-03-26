@@ -18,5 +18,8 @@ docker-compose up -d --build
 <!-- CREATE MISSING CONTAINERS -->
 docker compose up -d --no-recreate
 
+<!-- RECREATE CONTAINERS -->
+docker compose up -d --force-recreate
+
 <!-- LOAD DB BACKUP IN POSTGRES CONTAINER EXEC -->
 pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges /docker-entrypoint-initdb.d/backup.dump
