@@ -30,6 +30,18 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    user_badges: Mapped[list["UserBadge"]] = relationship(
+        "UserBadge",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    badges: Mapped[list["Badge"]] = relationship(
+        "Badge",
+        secondary="user_badges",
+        viewonly=True,
+    )
+
 class UserPreference(Base):
     __tablename__ = "user_preferences"
 
