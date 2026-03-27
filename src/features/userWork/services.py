@@ -99,6 +99,7 @@ class MyWorkService:
                 "repository_name": repo.name,
                 "repository_owner": repo.owner,
                 "repository_link": self._get_repo_link(repo),
+                "repository_branch": repo.default_branch,
                 "language": self._get_language_from_topics(repo),
                 "status": self._format_status(issue.state),
                 "progress_percentage": self._progress(issue.state),
