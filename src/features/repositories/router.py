@@ -68,6 +68,18 @@ def get_repositories(
         raise HTTPException(status_code=500, detail="Database Error") from e
 
 
+@router.get("/recommend")
+def get_recommended_repositories(
+    db: Session = Depends(get_db),
+):
+    repos_service = ReposService(db_session=db)
+    try:
+        repos = repos_service.get_recommended_repos(user_id=1)
+        return {"data": repos}
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail="Database Error") from e
+
+
 @router.get("/{repo_id}")
 def get_repo_by_id(
     repo_id: int,

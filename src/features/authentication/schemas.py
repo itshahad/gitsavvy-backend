@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     points: int
     level: int
 
+
 class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -32,3 +33,19 @@ class TokenResponse(BaseModel):
 class GitHubSyncRequest(BaseModel):
     github_access_token: str
 
+
+# ====================================================================
+
+
+class UserPreferencesEmbeddingModel(BaseModel):
+    preferences_id: int
+    embedding_vector: list[float]
+
+
+class UserPreferencesEmbeddingCreate(UserPreferencesEmbeddingModel):
+    pass
+
+
+class UserPreferencesEmbeddingRead(UserPreferencesEmbeddingModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int

@@ -10,7 +10,6 @@ from zipfile import ZipFile, ZipInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import Select
 
-from src.features.authentication.models import UserPreference
 from src.features.repositories.constants import (
     AST_LANG_EXT,
     BINARY_FILE_MAGICS,
@@ -117,10 +116,3 @@ def weekly_to_monthly_commit_activity(
         )
         for month, total in monthly.items()
     ]
-
-
-def build_user_profile(pref: UserPreference):
-    return (
-        f"Languages: {' '.join(pref.languages)}. "  # type: ignore
-        f"Interests: {' '.join(pref.interests)}."  # type: ignore
-    )
