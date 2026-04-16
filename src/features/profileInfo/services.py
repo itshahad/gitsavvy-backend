@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from src.features.authentication.models import User, UserPreference
 from src.features.userWork.services import sync_user_gamification
+from src.features.badges.services import check_and_assign_badges
 
 from typing import Any
 from sqlalchemy import select
@@ -36,6 +37,7 @@ def get_or_create_user_preference(db: Session, user: User) -> UserPreference:
 
 def build_account_profile(db: Session, user: User):
     user = sync_user_gamification(db, user)
+    user = check_and_assign_badges(db, user)
 
     languages = []
     interests = []
@@ -43,6 +45,16 @@ def build_account_profile(db: Session, user: User):
     if user.preference:
         languages = user.preference.languages or []
         interests = user.preference.interests or []
+
+    badges = [
+        {
+            "id": badge.id,
+            "name": badge.name,
+            "level": badge.level,
+            "icon": badge.icon,
+        }
+        for badge in user.badges
+    ]
 
     return {
         "id": user.id,
@@ -54,6 +66,7 @@ def build_account_profile(db: Session, user: User):
         "points": user.points,
         "level": user.level,
         "github_connected": user.github_id is not None,
+        "badges": badges,
         "preferences": {
             "languages": languages,
             "interests": interests,
