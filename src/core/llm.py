@@ -560,7 +560,7 @@ def stream_llm_response(
     file_path: str | None = None,
     sys_prompt: str | None = None,
     usr_prompt: str | None = None,
-    max_new_tokens: int = 160,
+    max_new_tokens: int = 512,
     temperature: float = 0.2,
     top_p: float = 0.9,
     repetition_penalty: float = 1.05,
