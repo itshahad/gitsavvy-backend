@@ -4,6 +4,8 @@ from src.database import Base
 from src.models import BaseModel
 from pgvector.sqlalchemy import Vector  # type: ignore
 
+from src.features.badges.models import Badge, UserBadge
+
 
 class User(Base):
     __tablename__ = "user"
