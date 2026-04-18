@@ -1,27 +1,71 @@
-# How to start server? 
+# GitSavvy
 
-## 1- ensure you have docker installed in your device
+GitSavvy is a backend system for analyzing GitHub repositories, generating structured documentation, and enabling intelligent code-aware conversations through a chatbot. It combines static analysis, embeddings, and large language models to provide deep insights into software projects.
 
-## 2- request the db dump and env file from me "Shahad" 
-* add the dump file to `postgres` folder
-* add the `.env` file to project root folder
+---
 
-## 3- run the command `docker-compose up -d --build` in terminal
+## Overview
 
-# How to load database `backup.dump` file? 
-* add the dump file to `postgres` folder
-* in docker: remove the postgres container and pgdata volume
-* in vscode terminal: run the command `docker compose up -d --no-recreate` 
-* open docker, in the running **postgres container**, go to `Exec` and run the following command:  
-  `pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges /docker-entrypoint-initdb.d/backup.dump`
+GitSavvy is built around three core capabilities:
 
-# How to access docs? 
+- **GitHub Integration**: Fetch and process repository data including files, issues, and metadata.
+- **Documentation Generation**: Automatically generate structured documentation using a bottom-up approach.
+- **Chatbot Interaction**: Allow users to query repositories using natural language with context-aware responses.
 
-## 1- for swagger docs:
-run the server and access [localhost:8000/docs](http://localhost:8000/docs) in your browser
+---
 
-## 2- for postman docs:
+## Features
 
-you can find the file "GitSavvy.postman_collection.json" in root folder of project, import it in postman and you will find all endpoints
+- GitHub repository ingestion
+- File filtering and processing
+- Text-based and AST-based code chunking
+- Semantic embeddings generation
+- Multi-level documentation:
+  - Function-level documentation
+  - Class-level summaries
+  - File-level summaries
+- Context-aware chatbot using vector search
+- Issue and comment synchronization
+- Real-time response streaming
 
+---
 
+## System Architecture
+
+The system is composed of the following modules:
+
+### Repository Service
+Handles repository ingestion, file selection, and integration with GitHub or uploaded archives.
+
+### Indexer
+Processes files into chunks:
+- Text chunking for general content
+- AST-based chunking for code structure
+
+### Embedding Service
+Generates vector embeddings for each chunk to enable semantic search.
+
+### Documentation Generator
+Uses a bottom-up approach:
+- Generates detailed documentation for functions
+- Produces summaries for higher-level components
+- Aggregates results into class and file documentation
+
+### Chatbot Service
+- Retrieves relevant chunks using vector similarity (L2 distance)
+- Builds contextual prompts
+- Streams responses from the language model
+
+---
+
+## Technologies
+
+- **Backend**: Python, FastAPI
+- **Database**: PostgreSQL
+- **ORM**: SQLAlchemy
+- **Migrations**: Alembic
+- **Embeddings Model**: BAAI/bge-code-v1
+- **LLM**: Qwen/Qwen2.5-Coder-3B-Instruct
+- **Vector Search**: L2 distance
+- **Caching / Messaging**: Redis
+- **Containerization**: Docker, Docker Compose
