@@ -79,6 +79,7 @@ def index_repo(
 
     try:
         self.update_state(state="PROGRESS", meta={"step": "embedding"})  # type: ignore
+        embedding_service.create_repo_profile_embedding()
         embedding_service.embed_chunks()
         db_session.commit()
 

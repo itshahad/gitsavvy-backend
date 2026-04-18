@@ -22,6 +22,19 @@ class TopicRead(RepositoryTopicModel):
 
 
 # ====================================================================
+class RepositoryLanguageModel(BaseModel):
+    pass
+
+
+class LanguageRead(RepositoryLanguageModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    repository_id: int
+    language: str
+
+
+# ====================================================================
 
 
 class RepositoryMetadataModel(BaseModel):
@@ -51,6 +64,7 @@ class RepoRead(RepositoryMetadataModel):
     avatar_url: HttpUrl | None = None
     url: HttpUrl
     topics: list[TopicRead] = []
+    languages: list[LanguageRead] = []
     stars_count: int | None
 
 

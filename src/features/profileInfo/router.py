@@ -12,6 +12,7 @@ from src.features.profileInfo.services import (
     build_account_profile,
     update_user_preferences,
 )
+from src.features.profileInfo.tasks import user_preferences_embedding_task
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -36,6 +37,8 @@ def update_preferences(
         languages=body.languages,
         interests=body.interests,
     )
+
+    user_preferences_embedding_task.delay(user_id=user.id)  # type: ignore
 
     return {
         "message": "Preferences updated successfully",

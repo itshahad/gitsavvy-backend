@@ -105,3 +105,23 @@ class ChunkEmbedding(BaseModel):
 
 
 # --------------------------------------------------------------
+
+
+class RepoProfileEmbedding(BaseModel):
+    __tablename__ = "repo_profile_embedding"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    embedding_vector: Mapped[list[float]] = mapped_column(Vector(1536))
+
+    repo_id: Mapped[int] = mapped_column(
+        ForeignKey("repository.id", ondelete="CASCADE"), unique=True
+    )
+    repository: Mapped["Repository"] = relationship(
+        back_populates="repo_profile_embedding"
+    )
+
+    def __repr__(self):
+        return f"RepoProfileEmbedding(id={self.id!r}, repo_id={self.repo_id!r}, embedding_vector={self.embedding_vector!r})"
+
+
+# --------------------------------------------------------------

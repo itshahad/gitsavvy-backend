@@ -6,13 +6,15 @@ from fastapi import BackgroundTasks
 import requests
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile, LargeZipFile, ZipInfo
-from sqlalchemy.orm import Session, defer
+from sqlalchemy.orm import Session, defer, joinedload
 from sqlalchemy import delete, select
 from src.core.validators import is_stale
 from src.database import SessionLocal
 from src.exceptions import ExternalServiceError, StorageError, raise_request_exception
 from sqlalchemy.exc import IntegrityError
 
+from src.features.authentication.models import UserPreference
+from src.features.indexer.models import RepoProfileEmbedding
 from src.features.indexer.utils import is_root_readme
 from src.features.repositories.config import API_URL, headers
 from src.features.repositories.constants import REPO_STATS_STALE_AFTER, REPOS_PATH
@@ -23,6 +25,7 @@ from src.features.repositories.models import (
     RepoMonthlyActivity,
     RepoStats,
     Repository,
+    RepositoryLanguage,
     RepositoryTopic,
     TopRepoContributors,
 )
@@ -68,6 +71,7 @@ class RepoProcessingService:
             r = self.http_session.get(
                 f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}", headers=headers()
             )
+            print(headers())
             r.raise_for_status()
             repo_metadata = RepoCreate.model_validate(r.json())
             repo_data = Repository(
@@ -80,12 +84,26 @@ class RepoProcessingService:
                 ),
             )
 
+            languages = self.http_session.get(
+                f"{API_URL}{REPOS_PATH}/{owner}/{repo_name}/languages",
+                headers=headers(),
+            )
+            languages.raise_for_status()
+            languages_data = languages.json()
+            print(languages_data)
+
             self.db_session.add(repo_data)
             self.db_session.flush()  # to get an id
             self.db_session.add_all(
                 [
                     RepositoryTopic(repository_id=repo_data.id, topic=t)
                     for t in repo_metadata.topics
+                ]
+            )
+            self.db_session.add_all(
+                [
+                    RepositoryLanguage(repository_id=repo_data.id, language=l)
+                    for l in languages_data.keys()
                 ]
             )
             self.db_session.refresh(repo_data)
@@ -289,11 +307,12 @@ class ReposService:
 
     cached_repos: dict[int, RepoRead] = {}
 
-    def get_repos(self):
+    def get_repos(self, k: int | None = None):
         stmt = (
             select(Repository)
             .options(defer(Repository.readme_content))
             .order_by(Repository.id)
+            .limit(k)
         )
         repos = self.db_session.execute(stmt).scalars().all()
 
@@ -685,3 +704,28 @@ class ReposService:
                 e=e,
                 not_found_exception=RepoNotFoundError(owner=owner, repo=repo_name),
             )
+
+    def get_recommended_repos(self, user_id: int, k: int = 5):
+        stmt = (
+            select(UserPreference)
+            .options(joinedload(UserPreference.user_preferences_embedding))
+            .where(UserPreference.user_id == user_id)
+        )
+        user_preferences = self.db_session.execute(stmt).scalar_one_or_none()
+
+        if user_preferences is None:
+            return self.get_repos(k=k)
+
+        distance = RepoProfileEmbedding.embedding_vector.l2_distance(
+            user_preferences.user_preferences_embedding
+        )
+
+        repo_stmt = (
+            select(Repository, distance.label("distance"))
+            .join(RepoProfileEmbedding, RepoProfileEmbedding.repo_id == Repository.id)
+            .order_by(distance)
+            .limit(k)
+        )
+
+        rows = self.db_session.execute(repo_stmt).all()
+        return [RepoRead.model_validate(row[0]) for row in rows]

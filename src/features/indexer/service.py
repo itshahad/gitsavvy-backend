@@ -454,6 +454,33 @@ class EmbeddingService:
             )
         self.chunks.extend(rows)
 
+    def create_repo_profile_embedding(self):
+        repo = self.db_session.get(Repository, self.repo_id)
+
+        if repo is None:
+            raise ValueError("Repo id is not associated with any repository")
+        repo_profile = build_repo_profile(repo=repo)
+
+        print(repo_profile)
+
+        device = next(self.embedder.parameters()).device
+
+        vec, _meta = embed_text(
+            text=repo_profile,
+            tokenizer=self.tokenizer,
+            model=self.embedder,
+            batch_encoding=batch_encoding,
+            embed_texts=embed_texts,
+            device=device,
+        )
+
+        embedding_data = RepoProfileEmbeddingCreate.model_validate(
+            {"repo_id": repo.id, "embedding_vector": vec}
+        )
+        embedding_db = RepoProfileEmbedding(**embedding_data.model_dump())
+        self.db_session.add(embedding_db)
+        self.db_session.commit()
+
     def create_chunk_embedding_text(
         self,
         chunk_type: ChunkType,
